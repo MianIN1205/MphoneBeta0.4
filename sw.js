@@ -3,7 +3,7 @@
 // 只处理本站文件，AI / 语音 / 生图等外部接口请求完全不经过这里。
 
 // 文件拆分后 css/、js/ 也要预先缓存；改动这个列表时把版本号加一
-const V = '159';   // 和 index.html、js/core/boot.js 里的版本号一样，用 tools/bump-version.py 一起改
+const V = '160';   // 和 index.html、js/core/boot.js 里的版本号一样，用 tools/bump-version.py 一起改
 const SCOPE = new URL(self.registration.scope);
 const CACHE_PREFIX = SCOPE.pathname === '/' ? 'mphone-v' : 'mphone:' + SCOPE.pathname + ':v';
 const CACHE = CACHE_PREFIX + V;
