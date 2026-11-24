@@ -277,6 +277,30 @@
 .pf-del-btn.hidden { display: none; }
 
 
+/* 世界书长按弹出菜单 */
+.wb-ctx-overlay {
+  position: fixed; inset: 0; z-index: 9999;
+  background: rgba(0,0,0,0.18);
+}
+.wb-ctx-menu {
+  position: fixed;
+  background: rgba(255,248,252,0.97);
+  backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px);
+  border-radius: 12px;
+  box-shadow: 0 6px 22px rgba(0,0,0,0.14), 0 1px 4px rgba(0,0,0,0.08);
+  border: 1px solid rgba(255,255,255,0.8);
+  min-width: 110px; padding: 4px;
+}
+.wb-ctx-item {
+  display: block; width: 100%; border: none; background: none;
+  padding: 10px 14px; border-radius: 8px;
+  font-size: 13px; color: #444; font-family: inherit;
+  cursor: pointer; text-align: left;
+  transition: background 0.15s;
+}
+.wb-ctx-item:active { background: rgba(208,88,120,0.08); }
+.wb-ctx-item.danger { color: #c03030; }
+
 /* 世界书条目：开关关掉时变淡 */
 .wb-folder-body .pf-entry-card .st-toggle-wrap { flex-shrink: 0; margin-left: 6px; }
 .wb-folder-body .pf-entry-card.disabled .pf-entry-card-body { opacity: 0.45; }
@@ -496,6 +520,11 @@
 .prompt-dragging .prompt-drop-only { display: block; }
 #stEntryPresetField label { display: block; }
 
+
+.st-entry-tokens {
+  display: inline-block; margin-top: 2px;
+  font-size: 10px; color: #b0a0a8; letter-spacing: 0.3px;
+}
 
 .st-entry-tools { display: flex; justify-content: space-between; margin: 3px 0 8px; }
 .st-entry-tools button { min-height: 29px; }

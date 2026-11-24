@@ -408,6 +408,15 @@ function renderStEntryList() {
     preview.textContent = entry.content || '（空内容）';
     main.appendChild(title);
     main.appendChild(preview);
+    // token 估算
+    if (entry.content) {
+      var tkCount = typeof estTokens === 'function' ? estTokens(entry.content)
+        : (function(s) { var w = (s.match(/[\u2E80-\u9FFF\uAC00-\uD7AF\uFF00-\uFFEF]/g) || []).length; return w + Math.ceil((s.length - w) / 4); })(entry.content);
+      var tk = document.createElement('span');
+      tk.className = 'st-entry-tokens';
+      tk.textContent = '~' + tkCount + ' tk';
+      main.appendChild(tk);
+    }
 
     var toggleLabel = document.createElement('label');
     toggleLabel.className = 'st-toggle-wrap';

@@ -25,7 +25,7 @@ function wbImpFromJson(j, fileName) {
     return j.folders.map(function(f) {
       return { name: String(f.name || '未分类'), entries: (f.entries || []).filter(function(e) { return e && e.content; }).map(function(e) {
         return { name: String(e.name || '未命名').slice(0, 60), keywords: wbImpKeys(e.keywords), content: String(e.content),
-          pos: wbPosition(e.pos), enabled: e.enabled !== false, rule: !!e.rule, depth: promptDepth(e.depth) };
+          pos: wbPosition(e.pos), enabled: e.enabled !== false, kind: e.kind || (e.rule ? 'rule' : ''), depth: promptDepth(e.depth) };
       }) };
     });
   }
@@ -140,9 +140,8 @@ document.getElementById('wbImpOk').addEventListener('click', function() {
       if (!f) { f = { id: genWbId('wf'), name: g.name }; wbFolders.push(f); folders++; }
       folderId = f.id;
     }
-    var entry = { id: genWbId('wb'), name: e.name, keywords: e.keywords || '', content: e.content, pos: wbPosition(e.pos), folderId: folderId };
+    var entry = { id: genWbId('wb'), name: e.name, keywords: e.keywords || '', content: e.content, pos: wbPosition(e.pos), folderId: folderId, kind: e.kind || (e.rule ? 'rule' : '') };
     if (e.enabled === false) entry.enabled = false;
-    if (e.rule) entry.rule = true;
     if (promptDepth(e.depth) !== undefined) entry.depth = promptDepth(e.depth);
     wbEntries.push(entry);
     added++;

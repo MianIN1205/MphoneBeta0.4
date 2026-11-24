@@ -86,7 +86,7 @@ function buildGroupMsgs(g, history, preview) {
     getActiveWbEntries(c, history, false).forEach(function(e) {
       var k = e.id || (e.name + '\n' + e.content);
       var depth = promptDepth(e.depth);
-      if (e.rule) {
+      if (wbIsRule(e)) {
         if (!ruleSeen[k]) {
           ruleSeen[k] = 1;
           if (depth === undefined && e.pos !== 'after') wbRuleList.push('【' + e.name + '】\n' + e.content);

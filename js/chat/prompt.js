@@ -516,12 +516,13 @@ function buildMsgs(idx, histOverride, historySession, preview) {
   var wbGroups = { before: [], after: [] }, wbRules = { before: [], after: [] }, depthEntries = [];
   getActiveWbEntries(char, history, isDrama).forEach(function(e) {
     var depth = promptDepth(e.depth);
+    var isRule = wbIsRule(e);
     if (depth !== undefined) {
-      depthEntries.push({ role: 'system', content: (e.rule ? WB_RULE_WRAP : WB_WRAP) + '\n\n【' + e.name + '】\n' + e.content,
+      depthEntries.push({ role: 'system', content: (isRule ? WB_RULE_WRAP : WB_WRAP) + '\n\n【' + e.name + '】\n' + e.content,
         previewLabel: e.name, promptDepth: depth });
       return;
     }
-    (e.rule ? wbRules : wbGroups)[wbPosition(e.pos)].push('【' + e.name + '】\n' + e.content);
+    (isRule ? wbRules : wbGroups)[wbPosition(e.pos)].push('【' + e.name + '】\n' + e.content);
   });
   var wbByPos = {};
   Object.keys(wbGroups).forEach(function(p) {
