@@ -56,6 +56,7 @@ function replyTakeTags(char, text) {
 }
 
 function commitAssistantReply(hist, raw, list, empty, firstMeta) {
+  // ── 第一阶段：从原始回复中提取各种标签和元数据 ──
   var status = '', headStatus = '', recap = '', patBack = false;
   var th = takeThink(raw);   // 思维链：摘出来存在第一条上，不显示成气泡（见 js/chat/prompt.js）
   var outFiles = [];
@@ -111,6 +112,7 @@ function commitAssistantReply(hist, raw, list, empty, firstMeta) {
   // 剧情配图：<配图>这一幕的画面</配图> 拿出来，回复后面单独一条（设置里剧情配图选了生图才会写）
   var illus = '', isDramaHist = !!(rc && dramaHistories[rc.id] === hist);
   raw = raw.replace(/<配图>([\s\S]*?)(<\/配图>|$)/g, function(_, s) { illus = s.replace(/\s+/g, ' ').trim(); return ''; });
+  // ── 第二阶段：拆条、构建消息数组 ──
   var parts = splitReplyParts(raw);
   // 聊天窗口：角色发的照片 <照片>画面</照片> 拆成单独一条（js/chat/img-use.js）
   if (rc && chatHistories[rc.id] === hist && typeof photoSplitParts === 'function') parts = photoSplitParts(parts, hist);
@@ -138,6 +140,7 @@ function commitAssistantReply(hist, raw, list, empty, firstMeta) {
   if (illus && isDramaHist && typeof imgUse === 'function' && imgUse('drama') === 'gen') added.push({ role: 'assistant', content: '[配图] ' + illus, textImg: illus, illus: true, time: now });
   var pc = charOfHistory(hist);
   if (patBack && pc && chatHistories[pc.id] === hist && Object.assign({}, DEFAULT_CHAT_CFG, pc.chatCfg || {}).patOn) added.push({ role: 'assistant', content: '', pat: 'user', time: now });
+  // ── 第三阶段：写入记录、渲染、触发后续动作 ──
   if (firstMeta && added[0]) Object.assign(added[0], firstMeta);
   added.forEach(function(m) {
     hist.push(m);
@@ -352,6 +355,12 @@ function genReattach() {
 }
 
 // onDone 接收写入记录的回复。重新生成时由 onFailure 先恢复原回复，再记录错误。
+// ── sendMsg 结构 ──
+// 1. 参数校验与状态初始化（cfg/hist/typing/ctrl/genStates）
+// 2. 内部闭包：roomOpen / scrollLive / recordToolCall / showReplyError / endGen / deliver
+// 3. 聊天窗口边生成边出气泡（previewStream）
+// 4. 组装消息（buildMsgs）+ 发起 llmRequest + 回查重试
+// 5. 完成 / 出错处理
 function sendMsg(userText, requestOnly, onDone, onFailure) {
   var cfg = getApiCfg(charList[openingChatCharIdx]);
   if (!cfg.url || !cfg.key || !cfg.model) {
@@ -380,7 +389,7 @@ function sendMsg(userText, requestOnly, onDone, onFailure) {
   var generation = genStates[gKey] = { ctrl: ctrl, char: replyChar, typing: typing, previews: function() { return previewRows; } };
   var historySession = { canSee: !!(mediaCfg.vision && llmCaps(cfg).image), photos: [], sentPhotos: new WeakSet(), voices: [], sentVoices: new Set() };
   syncGenBtn();
-  // 这个角色的聊天室开着（不管在看聊天还是剧情）就画进对应的列表；切去别的角色时不碰那边的列表
+  // ── sendMsg 闭包区：当前窗口判定、滚动、工具调用、错误提示、结束与交付 ──
   function roomOpen() { return appChatRoom.classList.contains('active') && charList[openingChatCharIdx] === replyChar; }
   function scrollLive() { var L = typing.row.parentNode; if (L) crStick(L); }
   function recordToolCall(item) {
@@ -464,6 +473,7 @@ function sendMsg(userText, requestOnly, onDone, onFailure) {
 
   // 聊天窗口边生成边出气泡：写完一行（或 |||）就先冒出一个气泡，正在写的那句只显示「正在输入」的小点
   // 这些气泡只是预览，回复完整收到后换成正式的消息（拆法和 commitAssistantReply 一样，看起来不会跳）
+  // ── sendMsg 预览流：边生成边冒气泡（聊天窗口） ──
   var rcCfg = Object.assign({}, DEFAULT_CHAT_CFG, (replyChar && replyChar.chatCfg) || {});
   var bubbleStream = !isGrp && isChatView && rcCfg.replyMax > 1 && !(typeof charBigBubble === 'function' && charBigBubble(replyChar));   // 仿siya 不一句句冒出来
   var previewRows = [], previewParts = [], previewTimer = 0, previewAt = 0;
@@ -507,7 +517,7 @@ function sendMsg(userText, requestOnly, onDone, onFailure) {
     if (parts.length > previewParts.length) previewTimer = setTimeout(function() { previewStream(shown); }, crBubbleGap(previewParts[previewParts.length - 1]));
   }
 
-  // 聊天视图附加回复格式要求（剧情视图不拆条、不加状态栏）；请求按接口类型自动适配（见 js/core/llm.js）
+  // ── sendMsg 请求发起：组装消息、调用 llmRequest、回查重试 ──
   var started = false;
   function finishStream() {
     endGen();

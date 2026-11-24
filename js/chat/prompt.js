@@ -407,20 +407,16 @@ function placePromptDepth(history, entries, preview) {
   return out;
 }
 
-function buildMsgs(idx, histOverride, historySession, preview) {
-  var char = charList[idx] || {};
-  if (char.isGroup && typeof buildGroupMsgs === 'function') return buildGroupMsgs(char, histOverride || getActiveHistory(idx), preview);   // 群聊（js/chat/group.js）
-  var sys  = (document.getElementById('systemPromptTA') ? document.getElementById('systemPromptTA').value.trim() : '');
+// ── 拼接角色和用户的资料段落（buildMsgs 用） ──
+function buildCharExtra(char) {
   var extra = '';
-  var fixed = char.builtinAssistant && typeof MIANIN_PERSONA !== 'undefined';   // MianIN：名字和人设固定（见 js/char/assistant.js）
+  var fixed = char.builtinAssistant && typeof MIANIN_PERSONA !== 'undefined';
   var persona = fixed ? MIANIN_PERSONA : char.charPersona;
   if (fixed) extra += '你的名字是：' + MIANIN_NAME + '。\n';
   else if (char.charAlias || char.charName) extra += '你的名字是：' + (char.charAlias || char.charName) + '。\n';
   if (persona)           extra += '你的人设：\n' + persona + '\n';
   if (char.charBirth)    extra += '你的生日：' + birthText(char.charBirth) + '\n';
-  // 聊出来的设定：聊天里 TA 自己说过的新细节（js/char/life.js），也是设定，要前后一致
   if ((char.selfFacts || []).length) extra += '你在聊天里补充过的自己（也是你的设定，要一直保持一致）：\n' + char.selfFacts.map(function(f) { return '- ' + f; }).join('\n') + '\n';
-  // USER：本聊天选用的账号（人设跟着账号走）+ 角色对该账号的专属印象
   var acc = resolveCharAccount(char);
   if (acc.nickname)      extra += '用户的名字是：' + acc.nickname + '。\n';
   if (char.userNickname) extra += '你对用户的称呼是：' + char.userNickname + '。\n';
@@ -428,6 +424,14 @@ function buildMsgs(idx, histOverride, historySession, preview) {
   if (acc.birthday)      extra += '用户的生日：' + birthText(acc.birthday) + '\n';
   var impression = impressionFor(char.userImpressions, acc.uid);
   if (impression)        extra += '你对用户的特别印象 / 设定：\n' + impression + '\n';
+  return extra;
+}
+
+function buildMsgs(idx, histOverride, historySession, preview) {
+  var char = charList[idx] || {};
+  if (char.isGroup && typeof buildGroupMsgs === 'function') return buildGroupMsgs(char, histOverride || getActiveHistory(idx), preview);   // 群聊（js/chat/group.js）
+  var sys  = (document.getElementById('systemPromptTA') ? document.getElementById('systemPromptTA').value.trim() : '');
+  var extra = buildCharExtra(char);
   var sysContent = (MPHONE_FICTION_NOTE + (sys ? '\n\n' + sys : '') + (extra ? '\n\n【你和{{user}}的资料】\n' + extra : '')).trim();
   var msgs = sysContent ? [{ role: 'system', content: sysContent, previewLabel: '系统提示词与角色资料' }] : [];
   // 系统内置助手：应用说明 + 已开启的权限
@@ -437,6 +441,7 @@ function buildMsgs(idx, histOverride, historySession, preview) {
   var feedSys = (typeof feedContextFor === 'function') ? feedContextFor(char) : '';
   if (feedSys) msgs.push({ role: 'system', content: feedSys });
 
+  // ── buildMsgs 第二段：历史裁剪（maxMem / ctxTokens / 总结 / 前情） ──
   var history = histOverride || getActiveHistory(idx);
   var fullHistory = history;   // 下面会裁剪 history；算「隔了多久」要用完整的记录
   var isDrama = history === getDramaHistory(idx);
@@ -489,7 +494,7 @@ function buildMsgs(idx, histOverride, historySession, preview) {
   // 普通对话只重复当前轮所需的原件。旧附件的原件由引用和回查按需补入。
   if (preview || historySession) richFrom = chatCurrentTurnStart(history);
 
-  // 记忆库：珍贵的回忆 + 和最近对话相关的记忆 + 怎样记下新记忆（权限在角色设置「扩展」页）
+  // ── buildMsgs 第三段：记忆库 ──
   var memSys = (typeof memoryContextFor === 'function') ? memoryContextFor(char, history) : '';
   if (memSys) msgs.push({ role: 'system', content: memSys });
   if (isChatHist && (preview || historySession)) {
@@ -500,6 +505,7 @@ function buildMsgs(idx, histOverride, historySession, preview) {
     if (dailyRule) msgs.push({ role: 'system', content: dailyRule });
   }
 
+  // ── buildMsgs 第四段：世界书 + 预设条目 ──
   // 世界书依条目的位置排在聊天记录前、后，或按深度插入。
   // 同一个位置的合成一段「背景设定」，并说清楚这是心里知道的背景：不复述、不反复提、不说「设定」「世界书」
   var wbGroups = { before: [], after: [] }, wbRules = { before: [], after: [] }, depthEntries = [];
@@ -535,6 +541,7 @@ function buildMsgs(idx, histOverride, historySession, preview) {
   }
 
 
+  // ── buildMsgs 第五段：历史消息格式化（媒体、日期标记、语音） ──
   var rawHist = history.slice().reverse().map(function(m, i) {
     // 先为最近发来的图片分配看图记录编号，最终仍按聊天原顺序发送。
     var c = historyVoicePrompt(historyPhotoPrompt(msgContentForAI(m, history.length - 1 - i >= richFrom, char), m, historySession, true), m, historySession);
@@ -572,7 +579,7 @@ function buildMsgs(idx, histOverride, historySession, preview) {
   var stkSys = (isChatHist && typeof stickerPrompt === 'function') ? stickerPrompt(char) : '';
   if (stkSys) msgs.push({ role: 'system', content: stkSys });
   if (attentionNote) msgs.push(attentionNote);
-  // 提示词、人设、预设、世界书里的 {{char}} / {{user}} 换成名字（聊天记录本身不动）
+  // ── buildMsgs 第六段：最终组装（宏替换、文件、深度条目、返回） ──
   var fill = function(m) { return typeof m.content === 'string' ? { role: m.role, content: fillMacros(m.content, char) } : m; };
   // 用户发来的文件：全文单独一段放在聊天记录前面（不替换 {{user}} 这些，原样给）
   var fileSys = (typeof filesContextFor === 'function') ? filesContextFor(history) : null;
