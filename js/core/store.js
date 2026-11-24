@@ -177,6 +177,9 @@ var mphoneStore = (function() {
     },
     save: function(key, val) {
       if (awaitingReload) return false;
+      // 深拷贝一份存入缓存，防止外部修改后缓存脏读。
+      // 注意：如果传入的 val 本身已经是刚序列化过的（如 saveHistories 的 strip），
+      // 这里会多做一次序列化——未来可考虑加 trusted 选项跳过。
       cache[key] = val === undefined ? undefined : JSON.parse(JSON.stringify(val));
       dirty.add(key);
       scheduleFlush();

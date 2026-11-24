@@ -19,6 +19,7 @@ var RE_GEMINI = /gemini/;
 var RE_GPT5 = /gpt-5/;
 var RE_O_SERIES = /(^|[-\/])o[1-9]\b/;
 var RE_CLAUDE_FALLBACK = /^claude-(fable-5-1|opus-5-5|opus-5|sonnet-5-5)$/;
+var RE_STREAM_TOOL_ERR = /stream(?:ing)?|tool.call|function.call|流式|工具调用/;
 
 function llmProvider(cfg) {
   return RE_ANTHROPIC_HOST.test(cfg.url || '') ? 'anthropic' : 'openai';
@@ -71,7 +72,7 @@ function llmCaps(cfg) {
 function llmRejectedMedia(err, msgs, caps) {
   if (!err || ![400, 415, 422].includes(err.status)) return {};
   var message = String(err.message || '').toLowerCase();
-  if (/stream(?:ing)?|tool.call|function.call|流式|工具调用/.test(message)) return {};
+  if (RE_STREAM_TOOL_ERR.test(message)) return {};
   var rejects = 'does not support|do not support|cannot accept|not supported|unsupported';
   var mediaNames = { image: 'input_image|image_url|images?|vision|图片|图像', audio: 'input_audio|audio|音频|原音' };
   var rejected = {};

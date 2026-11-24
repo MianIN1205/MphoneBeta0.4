@@ -33,6 +33,11 @@ function stripMsg(m, skipAlts) {
   if (m.photoNotes) o.photoNotes = m.photoNotes;
   return o;
 }
+// 保存时把聊天 / 剧情记录里的临时字段去掉
+// ⚠️ 性能注意：每次调用会遍历全部角色的全部消息做 stripMsg，
+// 然后 mphoneStore.save 内部还会再 JSON.parse(JSON.stringify) 深拷贝一次。
+// 聊天记录多了以后（20+ 角色 × 几百条）这里会成为瓶颈。
+// 长期计划：改成按角色分存（mphone_chat_角色id），只保存当前变化的角色。
 function saveHistories() {
   // 只保存需要的字段（去掉运行时状态）；语音录音以 dataURL 保存，刷新后可以重新播放
   var strip = function(all) {
