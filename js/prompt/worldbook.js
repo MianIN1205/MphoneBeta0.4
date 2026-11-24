@@ -87,10 +87,13 @@ function renderWbList() {
     // 文件夹操作：在此新建 / 重命名 / 删除（未分类没有重命名和删除）
     var addBtn = document.createElement('button');
     addBtn.className = 'wb-folder-act';
-    addBtn.textContent = '+ 条目';
-    addBtn.addEventListener('click', function(e) { e.stopPropagation(); openWbDetail(null, g.id); });
-    head.appendChild(addBtn);
-    if (g.id !== WB_NONE) {
+    var isSysFolder = typeof WB_SYSTEM_FOLDER_ID !== 'undefined' && g.id === WB_SYSTEM_FOLDER_ID;
+    if (!isSysFolder) {
+      addBtn.textContent = '+ 条目';
+      addBtn.addEventListener('click', function(e) { e.stopPropagation(); openWbDetail(null, g.id); });
+      head.appendChild(addBtn);
+    }
+    if (g.id !== WB_NONE && !isSysFolder) {
       var renBtn = document.createElement('button');
       renBtn.className = 'wb-folder-act';
       renBtn.textContent = '重命名';
@@ -165,8 +168,9 @@ function renderWbList() {
       card.appendChild(tl);
       card.insertAdjacentHTML('beforeend', '<svg class="pf-entry-chevron" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"></polyline></svg>');
       card.addEventListener('click', function() { openWbDetail(entry.id); });
-      // 长按条目直接删，不用点进去（用户要的）；按在开关上不算
+      // 长按条目直接删，不用点进去（用户要的）；按在开关上不算；系统条目不能长按删
       wbLongPress(card, function() {
+        if (entry.system) { showToast('系统条目不能删除', 'plain'); return; }
         openConfirm('删除条目「' + (entry.name || '未命名') + '」？', function() {
           wbEntries = wbEntries.filter(function(x) { return x.id !== entry.id; });
           saveWbEntries();
@@ -208,7 +212,11 @@ function wbLongPress(el, onLong) {
   el.addEventListener('contextmenu', function(e) { e.preventDefault(); });
 }
 // 删文件夹：里面有条目时问一下——条目移到未分类，还是连条目一起删（用户要的）
+// 系统文件夹不可删
 function askDelWbFolder(g) {
+  if (typeof WB_SYSTEM_FOLDER_ID !== 'undefined' && g.id === WB_SYSTEM_FOLDER_ID) {
+    showToast('系统文件夹不能删除', 'plain'); return;
+  }
   var drop = function(alsoEntries) {
     wbFolders = wbFolders.filter(function(f) { return f.id !== g.id; });
     if (alsoEntries) wbEntries = wbEntries.filter(function(en) { return en.folderId !== g.id; });
@@ -265,7 +273,14 @@ function openWbDetail(id, folderId) {
   if (sel.selectedIndex < 0) sel.value = WB_NONE;
   wbPositionPicker.set(wbPosition(entry && entry.pos), entry && entry.depth);
   wbEntryKind.querySelectorAll('.pf-radio-btn').forEach(function(b) { b.classList.toggle('selected', b.dataset.val === (entry && entry.rule ? 'rule' : '')); });
-  wbDetailDelete.classList.toggle('hidden', !entry);
+  // 系统条目：只能改内容和开关，不能删、不能改位置/类型/文件夹
+  var isSys = entry && entry.system;
+  wbDetailDelete.classList.toggle('hidden', !entry || isSys);
+  sel.disabled = isSys;
+  wbEntryName.readOnly = isSys;
+  document.getElementById('wbInjectPos').classList.toggle('disabled', isSys);
+  wbEntryKind.classList.toggle('disabled', isSys);
+  if (isSys) wbDetailTitle.textContent = '系统 · ' + (entry.name || '世界书条目');
   wbDetailView.classList.add('open');
 }
 
@@ -291,25 +306,36 @@ wbDetailSave.addEventListener('click', function() {
   var entry = null;
   wbEntries.forEach(function(e) { if (e.id === wbEditingId) entry = e; });
   if (entry) {
-    Object.assign(entry, data);
+    // 系统条目只允许改内容和关键词，其他字段保持不变
+    if (entry.system) {
+      entry.content = data.content;
+      entry.keywords = data.keywords;
+    } else {
+      Object.assign(entry, data);
+    }
   } else {
     data.id = genWbId('wb');
     wbEntries.push(data);
   }
   var saved = entry || data, depth = wbPositionPicker.depth;
-  if (depth === undefined) delete saved.depth; else saved.depth = depth;
+  if (!saved.system) {
+    if (depth === undefined) delete saved.depth; else saved.depth = depth;
+  }
   wbOpenFolders[data.folderId] = true;
   saveWbEntries();
   renderWbList();
   wbDetailView.classList.remove('open');
 });
 
-// 世界书 — 删除按钮
+// 世界书 — 删除按钮（系统条目不可删）
 wbDetailDelete.addEventListener('click', function() {
   if (!wbEditingId) {
     wbDetailView.classList.remove('open');
     return;
   }
+  var target = null;
+  wbEntries.forEach(function(e) { if (e.id === wbEditingId) target = e; });
+  if (target && target.system) { showToast('系统条目不能删除', 'plain'); return; }
   var delId = wbEditingId;
   openConfirm('删除此世界书条目？', function() {
     wbEntries = wbEntries.filter(function(e) { return e.id !== delId; });
@@ -342,6 +368,7 @@ function getActiveWbEntries(char, hist, drama) {
   var recent = hist.slice(-6).filter(function(m) { return m.role === 'user'; })
     .map(function(m) { return typeof m.content === 'string' ? m.content : ''; }).join('\n').toLowerCase();
   return wbEntries.filter(function(e) {
+    if (e.system) return false;   // 系统条目由 getSystemWbEntries 单独注入
     var fid = (e.folderId && known[e.folderId]) ? e.folderId : WB_NONE;
     var linked = ids.indexOf(e.id) >= 0 || folders.indexOf(fid) >= 0;
     if (!linked || !e.content || e.enabled === false) return false;

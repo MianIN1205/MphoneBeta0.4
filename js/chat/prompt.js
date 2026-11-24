@@ -530,6 +530,16 @@ function buildMsgs(idx, histOverride, historySession, preview) {
   });
   msgs = msgs.concat(wbByPos.before);
 
+  // ── 系统世界书（禁词库等）：全局生效、位置固定在世界书之后 ──
+  if (typeof getSystemWbEntries === 'function') {
+    var sysWb = getSystemWbEntries();
+    if (sysWb.length) {
+      msgs.push({ role: 'system', content: WB_RULE_WRAP + '\n\n' + sysWb.map(function(e) {
+        return '【' + e.name + '】\n' + e.content;
+      }).join('\n\n'), previewLabel: '系统世界书' });
+    }
+  }
+
   // 注入当前预设中已启用的提示词条目（按条目各自的 role 身份发送）。预设只给剧情窗口用（用户定的）：聊天窗口和各种活动只用世界书
   var curPreset = (typeof charPromptPreset === 'function') ? charPromptPreset(char) : (stPresets && stPresets[stActivePresetIdx]);
   var forDrama = (histOverride || getActiveHistory(idx)) === getDramaHistory(idx);

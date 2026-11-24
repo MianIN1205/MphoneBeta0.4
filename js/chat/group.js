@@ -119,6 +119,15 @@ function buildGroupMsgs(g, history, preview) {
   });
   var notice = (g.groupCfg && g.groupCfg.notice || '').trim();
   if (notice) msgs.push({ role: 'system', content: groupFill(g, '【群公告】（置顶在群里，所有人都看过、都知道，大家照着它来）\n' + notice) });
+  // 系统世界书（禁词库等）：群里也注入
+  if (typeof getSystemWbEntries === 'function') {
+    var sysWb = getSystemWbEntries();
+    if (sysWb.length) {
+      msgs.push({ role: 'system', content: groupFill(g, WB_RULE_WRAP + '\n\n' + sysWb.map(function(e) {
+        return '【' + e.name + '】\n' + e.content;
+      }).join('\n\n')) });
+    }
+  }
   msgs.push({ role: 'system', content: '【现在】' + groupNowText() + '。心里有数就好，不用主动报时间。' });
   // 记录：最近的，按 token 裁掉更早的；角色的话写成「名字：内容」，同一轮连着的合在一起
   var hist = history.slice(-80), total = 0, from = hist.length;

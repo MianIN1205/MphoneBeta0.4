@@ -200,3 +200,54 @@ var WB_TEACHING = {
   mphoneStore.save('mphone_wb_seed', 4);
   if (typeof renderWbList === 'function') renderWbList();
 })();
+
+// =============================================
+// 系统世界书 · 禁词库（system: true）
+// 只能改内容和开关，不能删、不能改位置/类型。
+// 注入位置固定在回复格式之前（buildMsgs 里用 getSystemWbEntries 取出）。
+// =============================================
+var WB_SYSTEM_FOLDER_ID = 'wf-system';
+var WB_SYSTEM_FOLDER_NAME = '系统';
+
+// 默认禁词内容（从系统提示词里移过来的反例 + 油腻词）
+var WB_SYSTEM_BANNED_DEFAULT =
+  '不复述、不总结对方的话，不给对方的情绪贴标签、做心理分析。\n' +
+  '不用「我明白」「好的」「收到」开头，不说像台词的安慰。\n' +
+  '不说油腻、霸总式的话（比如「小家伙」「丫头」「谁给你的胆子」），不居高临下地管教或审视对方。\n' +
+  '人设本来就这样说话的除外。';
+
+var WB_SYSTEM_ENTRIES = [
+  {
+    id: 'wb-sys-banned',
+    name: '禁词库',
+    content: WB_SYSTEM_BANNED_DEFAULT,
+    system: true,     // 系统条目：不可删、不可改位置/类型
+    rule: true,       // 写法要求
+    pos: 'before'     // 位置固定（代码里单独注入，不看这个值）
+  }
+];
+
+// 确保系统文件夹和条目存在（只建一次，之后用户改了内容就保留用户的版本）
+(function() {
+  if (!wbFolders.some(function(f) { return f.id === WB_SYSTEM_FOLDER_ID; })) {
+    wbFolders.unshift({ id: WB_SYSTEM_FOLDER_ID, name: WB_SYSTEM_FOLDER_NAME });
+  }
+  var changed = false;
+  WB_SYSTEM_ENTRIES.forEach(function(def) {
+    var exist = wbEntries.find(function(e) { return e.id === def.id; });
+    if (exist) {
+      // 确保 system 标记在（防止旧数据丢标记）
+      if (!exist.system) { exist.system = true; changed = true; }
+      return;
+    }
+    wbEntries.unshift({ id: def.id, name: def.name, keywords: '', content: def.content,
+      pos: def.pos, folderId: WB_SYSTEM_FOLDER_ID, rule: true, system: true, enabled: true });
+    changed = true;
+  });
+  if (changed) saveWbEntries();
+})();
+
+// 取出所有启用的系统世界书条目（buildMsgs 用）
+function getSystemWbEntries() {
+  return wbEntries.filter(function(e) { return e.system && e.enabled !== false && e.content; });
+}
