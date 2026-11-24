@@ -8,8 +8,20 @@
 // =============================================
 var ANTHROPIC_VERSION = '2026-10-21';
 
+// 正则常量：这些在 llmCaps / llmStrict / llmThinkOff / llmSendTemperature 等热路径上
+// 每次发消息都会调用，提前编译好避免重复开销
+var RE_ANTHROPIC_HOST = /(^|\/\/|\.)anthropic\.com/i;
+var RE_NO_IMAGE = /deepseek(?!.*vl)|o1-mini|o3-mini|qwq|(^|[-\/])r1\b|kimi-k2|-text-/;
+var RE_NO_AUDIO = /claude|deepseek|grok|(^|[-\/])o[1-4]\b|kimi|glm|llama|qwen(?!.*omni)|gpt-(4|5)(?!.*audio)|mistral(?!.*voxtral)/;
+var RE_STRICT_MODEL = /claude|deepseek-reasoner|deepseek-r1/;
+var RE_NO_TEMP_MODEL = /(^|[-\/])(o[1-9]|gpt-5)/;
+var RE_GEMINI = /gemini/;
+var RE_GPT5 = /gpt-5/;
+var RE_O_SERIES = /(^|[-\/])o[1-9]\b/;
+var RE_CLAUDE_FALLBACK = /^claude-(fable-5-1|opus-5-5|opus-5|sonnet-5-5)$/;
+
 function llmProvider(cfg) {
-  return /(^|\/\/|\.)anthropic\.com/i.test(cfg.url || '') ? 'anthropic' : 'openai';
+  return RE_ANTHROPIC_HOST.test(cfg.url || '') ? 'anthropic' : 'openai';
 }
 function llmModelName(cfg) { return String(cfg.model || '').toLowerCase(); }
 
@@ -47,8 +59,8 @@ function llmRememberMedia(cfg, support) {
 }
 function llmCaps(cfg) {
   var m = llmModelName(cfg), anthropic = llmProvider(cfg) === 'anthropic';
-  var noImage = /deepseek(?!.*vl)|o1-mini|o3-mini|qwq|(^|[-\/])r1\b|kimi-k2|-text-/.test(m);
-  var noAudio = /claude|deepseek|grok|(^|[-\/])o[1-4]\b|kimi|glm|llama|qwen(?!.*omni)|gpt-(4|5)(?!.*audio)|mistral(?!.*voxtral)/.test(m);
+  var noImage = RE_NO_IMAGE.test(m);
+  var noAudio = RE_NO_AUDIO.test(m);
   var support = llmMediaSupport[llmMediaKey(cfg)] || {};
   var now = Date.now();
   var image = support._imageAt && now - support._imageAt >= MEDIA_REJECT_EXPIRE ? undefined : support.image;
@@ -83,18 +95,18 @@ function llmThinkOff(cfg) {
   if ((cfg.cot || (typeof cotModeNow === 'function' && cotModeNow())) === 'native') return null;   // 思考方式选了「模型自带的」：不去关（cfg.cot 是这个角色单独选的）
   if (llmProvider(cfg) === 'anthropic' || llmThinkBlock[cfg.model]) return null;
   var m = llmModelName(cfg);
-  if (/gemini/.test(m)) return { reasoning_effort: 'none' };
-  if (/gpt-5/.test(m)) return { reasoning_effort: 'minimal' };
-  if (/(^|[-\/])o[1-9]\b/.test(m)) return { reasoning_effort: 'low' };
+  if (RE_GEMINI.test(m)) return { reasoning_effort: 'none' };
+  if (RE_GPT5.test(m)) return { reasoning_effort: 'minimal' };
+  if (RE_O_SERIES.test(m)) return { reasoning_effort: 'low' };
   return null;
 }
 // 需要「系统提示合并成一条、用户和角色交替、最后一条是用户」的接口
 function llmStrict(cfg) {
-  return llmProvider(cfg) === 'anthropic' || /claude|deepseek-reasoner|deepseek-r1/.test(llmModelName(cfg));
+  return llmProvider(cfg) === 'anthropic' || RE_STRICT_MODEL.test(llmModelName(cfg));
 }
 // OpenAI 推理模型（o1/o3/o4、GPT-5）不接受自定义 temperature
 function llmSendTemperature(cfg) {
-  return llmProvider(cfg) !== 'anthropic' && !/(^|[-\/])(o[1-9]|gpt-5)/.test(llmModelName(cfg));
+  return llmProvider(cfg) !== 'anthropic' && !RE_NO_TEMP_MODEL.test(llmModelName(cfg));
 }
 
 function partsText(content) {
@@ -206,7 +218,7 @@ function llmBuild(prepared, cfg, opts) {
     };
     if (prepared.system) body.system = prepared.system;
     // 较新的 Claude 模型：安全策略拒绝时由服务器自动换模型接着回答
-    if (/^claude-(fable-5-1|opus-5-5|opus-5|sonnet-5-5)$/.test(cfg.model)) {
+    if (RE_CLAUDE_FALLBACK.test(cfg.model)) {
       headers['anthropic-beta'] = 'server-side-fallback-2026-07-01';
       body.fallbacks = 'default';
     }

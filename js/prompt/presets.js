@@ -149,7 +149,7 @@ function saveStPresetsToStorage() {
   try {
     mphoneStore.save('mphone_st_presets', stPresets);
     mphoneStore.save('mphone_st_active_idx', stActivePresetIdx);
-  } catch (_) {}
+  } catch (e) { console.warn('[presets] 保存预设失败', e); }
 }
 
 function loadStPresetsFromStorage() {
@@ -172,7 +172,7 @@ function loadStPresetsFromStorage() {
         return;
       }
     }
-  } catch (_) {}
+  } catch (e) { console.warn('[presets] 读取预设失败，使用默认值', e); }
   stPresets = getDefaultStPresets();
   stActivePresetIdx = 0;
 }
