@@ -48,7 +48,6 @@ var llmMediaSupport = (function() {
 function llmMediaKey(cfg) {
   return JSON.stringify([String(cfg.url || '').trim().replace(/\/+$/, ''), cfg.model]);
 }
-var MEDIA_REJECT_EXPIRE = 24 * 60 * 60 * 1000; // 负面缓存 24 小时后过期，重新检测
 function llmRememberMedia(cfg, support) {
   var key = llmMediaKey(cfg);
   var entry = Object.assign({}, llmMediaSupport[key], support), now = Date.now();
