@@ -175,12 +175,14 @@ var mphoneStore = (function() {
     load: function(key, def) {
       return cache[key] === undefined ? def : cache[key];
     },
-    save: function(key, val) {
+    save: function(key, val, options) {
       if (awaitingReload) return false;
-      // 深拷贝一份存入缓存，防止外部修改后缓存脏读。
-      // 注意：如果传入的 val 本身已经是刚序列化过的（如 saveHistories 的 strip），
-      // 这里会多做一次序列化——未来可考虑加 trusted 选项跳过。
-      cache[key] = val === undefined ? undefined : JSON.parse(JSON.stringify(val));
+      // trusted: 调用方保证 val 不会再被外部修改，可跳过深拷贝
+      if (options && options.trusted) {
+        cache[key] = val;
+      } else {
+        cache[key] = val === undefined ? undefined : JSON.parse(JSON.stringify(val));
+      }
       dirty.add(key);
       scheduleFlush();
       saveListeners.forEach(function(fn) { fn(key); });
