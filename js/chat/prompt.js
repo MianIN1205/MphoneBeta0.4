@@ -49,7 +49,7 @@ function chatFormatRules(char) {
     if (c.translate) rules.push('每条消息的外语正文后另起一行，以「〔译〕」开头给出中文翻译。');
   }
   rules.push('本轮说出口的话写成 ' + (c.replyMin === c.replyMax ? c.replyMax : c.replyMin + '～' + c.replyMax) +
-    ' 条短气泡，每两条之间写 |||。一个气泡只讲一件事，中文尽量约 20 字，避免超过 30 字。想说的太多时，挑最重要的话说，别把几句硬塞在一起凑条数。动作单独写在 *星号* 内，不算台词条数。需要整段复制的长内容请用长文本或文件。');
+    ' 句，每两句之间写 |||。每句话只说一件事，别太长。想说的太多就挑重要的，别硬塞。动作写在 *星号* 内，不算句数。需要整段复制的长内容请用长文本或文件。');
   // 帮忙记提醒 / 闹钟 / 日程（见 js/chat/calendar.js）
   if (typeof CAL_RULE === 'string') rules.push(CAL_RULE);
   if (c.recallOn) {
@@ -77,7 +77,13 @@ function chatFormatRules(char) {
              '它会显示在聊天界面你名字的下面，像微信状态一样（比如「在赶地铁」「有点困了」）。现在显示的是「' +
              (char.headStatus || CHAT_SUB_DEFAULT) + '」，没变就不用写。');
   if (!(typeof readerOpenWith === 'function' && readerOpenWith(char))) statusRulesFor(char, false).forEach(function(r) { rules.push(r); });   // 在书里一起看时先不要状态栏
-  return rules.length ? [{ role: 'system', content: '【回复格式】' + rules.join('\n') }] : [];
+  // 拆成两段：说话方式（第一条，微信风格 + 动描）和标签功能（剩余的格式标签、行为规则）
+  var style = rules[0] || '';
+  var tags = rules.slice(1);
+  var parts = [];
+  if (style) parts.push('【回复格式 · 说话方式】\n' + style);
+  if (tags.length) parts.push('【回复格式 · 标签和功能】\n' + tags.join('\n'));
+  return parts.length ? [{ role: 'system', content: parts.join('\n\n') }] : [];
 }
 var DRAMA_STATUS_FIELDS = [
   ['时间', '沿用剧情里的时间或时段'], ['地点', '当前所在的小场景'],
@@ -388,10 +394,9 @@ function activityAsk(text) {
 }
 
 // 世界书的统一开头：角色只把它当背景，不要一遍遍念出来
-var WB_WRAP = '【背景设定】下面是这个世界、地点、人物和事物的设定，是你心里清楚的背景知识，不是对话里正在发生的事。' +
-  '只在剧情自然需要时体现出来；不要复述、不要逐条提起，同一个设定不要反复强调，也不要说出「设定」「世界书」这类词。';
+var WB_WRAP = '【背景设定】下面是你心里清楚的背景知识。剧情自然需要时才体现，不要复述或主动提起，也不要说出「设定」「世界书」这类词。';
 // 世界书里标成「写法要求」的条目：是要照着做的规矩，不是背景，单独一段放在聊天记录后面
-var WB_RULE_WRAP = '【写法要求】下面几条是这次回复要照着做的写法要求，和回复格式一起遵守。照做就好，不要在回复里提到这些要求。';
+var WB_RULE_WRAP = '【写法要求】下面是这次回复要照着做的写法要求。照做就好，不要在回复里提到这些要求。';
 
 function placePromptDepth(history, entries, preview) {
   var at = new Map(), out = [];

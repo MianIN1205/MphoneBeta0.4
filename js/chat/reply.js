@@ -37,7 +37,11 @@ function replyHideTags(text) {
 }
 function replySeparators(text) {
   return String(text || '').split(/(```[\s\S]*?(?:```|$))/).map(function(part, i) {
-    return i % 2 ? part : part.replace(/\x60?(?:\\?[|｜¦][ \t]*){3,}\x60?/g, '|||');
+    if (i % 2) return part;   // 代码块不动
+    part = part.replace(/\x60?(?:\\?[|｜¦][ \t]*){3,}\x60?/g, '|||');
+    // 模型经常只写 || 分条：行首恰好 2 个竖线（后面不紧跟第 3 个）也当分隔符
+    part = part.replace(/(^|\n)[ \t]*(?:\\?[|｜¦]){2}(?![|｜¦])[ \t]*/gm, '$1|||');
+    return part;
   }).join('');
 }
 function splitReplyParts(text) {
