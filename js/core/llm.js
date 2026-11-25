@@ -94,10 +94,11 @@ function llmRejectedMedia(err, msgs, caps) {
 }
 // 尽量关掉模型自带的思考（眠花糖机的思维链是自己写的，见 js/chat/prompt.js；关掉思维链时也不要模型自己想）
 // Claude 官方接口默认就不思考；OpenAI 兼容接口里 Gemini、GPT-5、o 系列可以用 reasoning_effort 调低。
+// 只在聊天窗口选了具体思维链时才关：剧情窗口 cfg.cot='off'，不发 reasoning_effort（剧情预设自带思考）
 // 中转或模型不认这个参数报错时，自动去掉再发一次，并记住这个模型（mphone_think_block）
 var llmThinkBlock = mphoneStore.load('mphone_think_block', {});
 function llmThinkOff(cfg) {
-  if ((cfg.cot || (typeof cotModeNow === 'function' && cotModeNow())) === 'native') return null;   // 思考方式选了「模型自带的」：不去关（cfg.cot 是这个角色单独选的）
+  if (!cfg.cot || cfg.cot === 'off' || cfg.cot === 'native') return null;   // 剧情窗口(off)、模型自带(native)、未设置：都不关
   if (llmProvider(cfg) === 'anthropic' || llmThinkBlock[cfg.model]) return null;
   var m = llmModelName(cfg);
   if (RE_GEMINI.test(m)) return { reasoning_effort: 'none' };
