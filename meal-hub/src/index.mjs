@@ -60,7 +60,7 @@ async function readJson(request, limit) {
 function view(pot) {
   return {
     provider: pot.source, models: pot.models, expires: pot.expires, portions: pot.portions,
-    perPerson: pot.perPerson, claimed: pot.claimed, remaining: pot.remaining,
+    perPerson: pot.perPerson, claimed: pot.claimed, total: pot.total, remaining: pot.remaining,
     state: pot.closed ? 'closed' : pot.expires <= Date.now() ? 'expired' : pot.remaining <= 0 ? 'spent' : 'active'
   };
 }
@@ -129,7 +129,7 @@ async function route(request, env) {
     const pot = {
       provider: body.provider, source: provider.name, models, key: await protect(env.MEAL_SECRET, body.key),
       owner: await hash(owner), expires: Date.now() + body.days * DAY, portions: body.portions,
-      perPerson: body.perPerson, claimed: 0, remaining: body.total, closed: false
+      perPerson: body.perPerson, claimed: 0, total: body.total, remaining: body.total, closed: false
     };
     const response = await call(env, code, { action: 'create', pot });
     return response.ok ? Response.json({ code, owner, ...view(pot) }, { status: 201 }) : response;

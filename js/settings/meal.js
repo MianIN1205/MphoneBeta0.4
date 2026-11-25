@@ -6,11 +6,20 @@ const mealIdentityKey = 'mphoneMealBrowser';
 const mealDraftBlocks = document.getElementById('mealSection');
 const mealIssueForm = document.getElementById('mealIssueForm');
 const mealClaimForm = document.getElementById('mealClaimForm');
-const mealPresetPick = document.getElementById('mealPresetPick');
+const mealIssueAddress = document.getElementById('mealIssueAddress');
+const mealIssueKey = document.getElementById('mealIssueKey');
 const mealModels = document.getElementById('mealModels');
 const mealSource = document.getElementById('mealSource');
 const mealNotice = document.getElementById('mealNotice');
 const mealCodeInput = document.getElementById('mealCodeInput');
+const mealPrivacy = document.getElementById('mealPrivacy');
+const mealShareNote = '使用这张码时，随请求发送的聊天内容和附件会经过大锅饭后台及服务商，建议用新聊天试用。';
+
+function mealReadCode() {
+  const text = mealCodeInput.value.trim().toLowerCase();
+  const shared = text.match(/^🍲 眠花糖机大锅饭兑换码[：:]\s*([a-f0-9]{32})(?=\s|使用这张码时|$)/u);
+  return shared ? shared[1] : text;
+}
 const mealClaimReview = document.getElementById('mealClaimReview');
 const mealIssued = document.getElementById('mealIssued');
 const mealHelpers = document.getElementById('mealApiHint');
@@ -97,12 +106,7 @@ function mealBusy(button, operation) {
   Promise.resolve().then(operation).catch(error => mealSetNotice(error.message || '操作失败，请稍后再试。'))
     .finally(() => { button.disabled = false; });
 }
-function mealRenderPresets() {
-  mealPresetPick.replaceChildren(new Option('请选择自己保存的 API 预设', ''));
-  apiPresets.forEach((preset, index) => {
-    if (preset?.url && preset.key && !preset.mealCode) mealPresetPick.add(new Option(preset.name, index));
-  });
-}
+
 function mealFillModels(ids, selected) {
   mealModels.replaceChildren();
   [...new Set(ids.filter(Boolean))].forEach(id => {
@@ -115,30 +119,28 @@ function mealFillModels(ids, selected) {
     mealModels.append(field);
   });
 }
-mealPresetPick.addEventListener('change', async () => {
-  const request = ++mealIssuerRequest;
-  const preset = mealPresetPick.value === '' ? null : apiPresets[Number(mealPresetPick.value)];
-  mealIssueSource = null;
-  mealSource.textContent = '';
-  mealModels.replaceChildren();
-  if (!preset) return;
-  try {
-    const source = await mealRequest('/source', { address: preset.url });
-    if (request !== mealIssuerRequest) return;
-    mealIssueSource = source;
-    mealSource.textContent = '食材来源（服务商） · ' + source.name;
-    mealFillModels([preset.model], preset.model);
-  } catch (error) {
-    if (request === mealIssuerRequest) mealSource.textContent = error.message;
-  }
+[mealIssueAddress, mealIssueKey].forEach(input => {
+  input.addEventListener('input', () => {
+    mealIssuerRequest++;
+    mealIssueSource = null;
+    mealSource.textContent = '';
+    mealModels.replaceChildren();
+  });
 });
 document.getElementById('mealLoadModels').addEventListener('click', event => {
+  const address = mealIssueAddress.value.trim().replace(/\/+$/, '');
+  const key = mealIssueKey.value.trim();
+  const request = ++mealIssuerRequest;
   mealBusy(event.currentTarget, async () => {
-    if (!mealIssueSource) throw new Error('请先选择受支持的 API 预设。');
-    const index = mealPresetPick.value;
-    const preset = apiPresets[Number(index)];
-    const ids = await llmListModels(preset.url, preset.key);
-    if (mealPresetPick.value === index) mealFillModels([preset.model, ...ids], preset.model);
+    if (!address || !key) throw new Error('请填写接口地址和 API Key。');
+    const source = await mealRequest('/source', { address });
+    if (request !== mealIssuerRequest) return;
+    mealSource.textContent = '食材来源（服务商） · ' + source.name;
+    const ids = await llmListModels(address, key);
+    if (request !== mealIssuerRequest) return;
+    mealIssueSource = source;
+    mealFillModels(ids, ids.length === 1 ? ids[0] : '');
+    if (!ids.length) throw new Error('服务商没有返回可用模型。');
   });
 });
 
@@ -146,16 +148,19 @@ mealIssueForm.addEventListener('submit', event => {
   event.preventDefault();
   const fields = new FormData(mealIssueForm);
   const models = [...mealModels.querySelectorAll('input:checked')].map(input => input.value);
-  const preset = mealPresetPick.value === '' ? null : apiPresets[Number(mealPresetPick.value)];
+  const address = mealIssueAddress.value.trim().replace(/\/+$/, '');
+  const key = mealIssueKey.value.trim();
   mealBusy(event.submitter, async () => {
-    if (!mealIssueSource || !preset || !models.length) throw new Error('请选一个可用的 API 预设和至少一个模型。');
+    if (!mealIssueSource || !address || !key || !models.length) throw new Error('请填写地址和 Key，获取模型后至少选一个。');
     const made = await mealRequest('/create', {
-      provider: mealIssueSource.id, address: preset.url, key: preset.key, models,
+      provider: mealIssueSource.id, address, key, models,
       portions: Number(fields.get('portions')), perPerson: Number(fields.get('perPerson')),
       total: Number(fields.get('total')), days: Number(fields.get('days'))
     });
     const owned = mealRemember('mphoneMealOwned') || [];
-    mealRemember('mphoneMealOwned', [...owned, { code: made.code, owner: made.owner, provider: made.provider }]);
+    mealRemember('mphoneMealOwned', [{ ...made, total: made.total ?? Number(fields.get('total')) }, ...owned]);
+    mealIssueKey.value = '';
+    mealIssueKey.dispatchEvent(new Event('input'));
     mealRenderOwned();
     mealSetNotice('兑换码已生成，复制后私下分享。');
   });
@@ -163,7 +168,14 @@ mealIssueForm.addEventListener('submit', event => {
 
 function mealRenderOwned() {
   mealIssued.replaceChildren();
-  (mealRemember('mphoneMealOwned') || []).forEach(pot => {
+  const owned = mealRemember('mphoneMealOwned') || [];
+  if (!owned.length) {
+    const empty = document.createElement('div');
+    empty.className = 'auto-hint';
+    empty.textContent = '生成后的兑换码会显示在这里。';
+    mealIssued.append(empty);
+  }
+  owned.forEach(pot => {
     const row = document.createElement('div');
     row.className = 'meal-owned';
     const title = document.createElement('div');
@@ -180,20 +192,31 @@ function mealRenderOwned() {
     check.textContent = '查用量';
     close.textContent = '关闭兑换';
     copy.addEventListener('click', () => mealBusy(copy, async () => {
-      await navigator.clipboard.writeText(pot.code);
-      mealSetNotice('兑换码已复制。');
+      await navigator.clipboard.writeText('🍲 眠花糖机大锅饭兑换码：' + pot.code + '\n' + mealShareNote);
+      mealSetNotice('已复制兑换码和使用说明。');
     }));
-    function update(summary) {
-      status.textContent = '已领 ' + summary.claimed + '/' + summary.portions + ' · 共剩 ' + summary.remaining + ' 次' +
+    function render(summary) {
+      const total = summary.total;
+      const usage = Number.isInteger(total) ? '总额度 ' + total + ' 次 · 已用 ' + (total - summary.remaining) + ' 次 · ' : '';
+      status.textContent = '已领 ' + summary.claimed + '/' + summary.portions + ' 份 · 每份 ' + summary.perPerson + ' 次 · ' +
+        usage + '剩余 ' + summary.remaining + ' 次' +
         (mealStateLabel[summary.state] ? ' · ' + mealStateLabel[summary.state] : '');
       close.hidden = summary.state !== 'active';
     }
+    function update(summary) {
+      render(summary);
+      const items = mealRemember('mphoneMealOwned') || [];
+      mealRemember('mphoneMealOwned', items.map(item => item.code === pot.code ? { ...item, ...summary } : item));
+    }
+    if (Number.isInteger(pot.claimed)) render(pot);
+    else status.textContent = '点「查用量」获取领取和使用记录。';
     check.addEventListener('click', () => mealBusy(check, async () => update(await mealRequest('/owner', {}, pot.code + '.' + pot.owner))));
     close.addEventListener('click', () => openConfirm('关闭后，已领取的测试预设也会失效。确认关闭？', () => {
       mealBusy(close, async () => update(await mealRequest('/close', {}, pot.code + '.' + pot.owner)));
     }));
     row.append(title, code, status, copy, check, close);
     mealIssued.append(row);
+    if (mealBase && pot.state !== 'closed') mealRequest('/owner', {}, pot.code + '.' + pot.owner).then(update).catch(() => {});
   });
 }
 
@@ -205,10 +228,10 @@ mealCodeInput.addEventListener('input', () => {
 mealClaimForm.addEventListener('submit', event => {
   event.preventDefault();
   mealBusy(event.submitter, async () => {
-    const code = mealCodeInput.value.trim().toLowerCase();
+    const code = mealReadCode();
     if (!mealCodePattern.test(code)) throw new Error('请检查兑换码。');
     const summary = await mealRequest('/inspect', { code });
-    if (mealCodeInput.value.trim().toLowerCase() !== code) return;
+    if (mealReadCode() !== code) return;
     const existing = mealActiveCredential(code);
     mealClaimReview.replaceChildren();
     mealClaimReview.hidden = false;
@@ -220,7 +243,7 @@ mealClaimForm.addEventListener('submit', event => {
       '　每份 ' + summary.perPerson + ' 次　' + new Date(summary.expires).toLocaleString() + ' 到期';
     models.textContent = '模型 · ' + summary.models.join(' / ');
     privacy.className = 'auto-hint';
-    privacy.textContent = '使用时，聊天和附件会经兑换服务发送给食材来源。';
+    privacy.textContent = '使用时，聊天上下文及随请求发送的图片或语音会经过兑换后台，再发给这家服务商。';
     confirm.type = 'button';
     confirm.className = 'action-btn btn-apply';
     confirm.textContent = existing ? '打开已领取预设' : '领取并保存为测试 API 预设';
@@ -258,8 +281,10 @@ mealDraftBlocks.querySelectorAll('[data-meal-toggle]').forEach(button => {
       target.hidden = !(target === panel && open);
       tab.setAttribute('aria-expanded', String(!target.hidden));
     });
+    mealPrivacy.hidden = !open;
+    if (!open) mealPrivacy.open = false;
     mealSetNotice(open && !mealBase ? '醞酿中，兑换服务尚未配置。' : '');
-    if (open && panel.contains(mealIssueForm)) { mealRenderPresets(); mealRenderOwned(); }
+    if (open && panel.contains(mealIssueForm)) mealRenderOwned();
   });
 });
 document.getElementById('mealSwitchManual').addEventListener('click', () => {

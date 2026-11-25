@@ -754,6 +754,8 @@ textarea.field-input { resize: vertical; font-family: inherit; line-height: 1.5;
 
 .meal-heading { display: flex; align-items: center; gap: 7px; }
 .meal-heading > :first-child { margin-inline-end: auto; }
+.meal-title .auto-hint { white-space: nowrap; }
+.meal-heading [data-meal-toggle] { min-width: 60px; padding-inline: 10px; }
 .meal-heading .action-btn, .meal-owned .action-btn { flex: none; }
 .meal-panel { margin-top: 12px; }
 .meal-form { display: grid; gap: 7px; }
