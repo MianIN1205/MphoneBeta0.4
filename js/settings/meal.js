@@ -23,7 +23,6 @@ function mealReadCode() {
 const mealClaimReview = document.getElementById('mealClaimReview');
 const mealIssued = document.getElementById('mealIssued');
 const mealHelpers = document.getElementById('mealApiHint');
-let mealIssueSource = null;
 let mealInspectedCode = '';
 let mealIssuerRequest = 0;
 
@@ -122,7 +121,6 @@ function mealFillModels(ids, selected) {
 [mealIssueAddress, mealIssueKey].forEach(input => {
   input.addEventListener('input', () => {
     mealIssuerRequest++;
-    mealIssueSource = null;
     mealSource.textContent = '';
     mealModels.replaceChildren();
   });
@@ -132,15 +130,20 @@ document.getElementById('mealLoadModels').addEventListener('click', event => {
   const key = mealIssueKey.value.trim();
   const request = ++mealIssuerRequest;
   mealBusy(event.currentTarget, async () => {
-    if (!address || !key) throw new Error('请填写接口地址和 API Key。');
-    const source = await mealRequest('/source', { address });
-    if (request !== mealIssuerRequest) return;
-    mealSource.textContent = '食材来源（服务商） · ' + source.name;
-    const ids = await llmListModels(address, key);
-    if (request !== mealIssuerRequest) return;
-    mealIssueSource = source;
-    mealFillModels(ids, ids.length === 1 ? ids[0] : '');
-    if (!ids.length) throw new Error('服务商没有返回可用模型。');
+    if (!address || !key) { mealSource.textContent = '请填写接口地址和 API Key。'; return; }
+    if (!mealIssueAddress.checkValidity() || !/^https:\/\//i.test(address)) {
+      mealSource.textContent = '请填写以 HTTPS 开头的有效接口地址。';
+      return;
+    }
+    mealSource.textContent = '正在获取模型…';
+    try {
+      const ids = await llmListModels(address, key);
+      if (request !== mealIssuerRequest) return;
+      mealFillModels(ids, ids.length === 1 ? ids[0] : '');
+      mealSource.textContent = ids.length ? '已获取 ' + ids.length + ' 个模型，可以多选。' : '服务商没有返回可用模型。';
+    } catch (_) {
+      if (request === mealIssuerRequest) mealSource.textContent = '获取模型失败，请检查接口地址、Key 和网络。';
+    }
   });
 });
 
@@ -151,9 +154,10 @@ mealIssueForm.addEventListener('submit', event => {
   const address = mealIssueAddress.value.trim().replace(/\/+$/, '');
   const key = mealIssueKey.value.trim();
   mealBusy(event.submitter, async () => {
-    if (!mealIssueSource || !address || !key || !models.length) throw new Error('请填写地址和 Key，获取模型后至少选一个。');
+    if (!address || !key || !models.length) throw new Error('请填写地址和 Key，获取模型后至少选一个。');
+    const source = await mealRequest('/source', { address });
     const made = await mealRequest('/create', {
-      provider: mealIssueSource.id, address, key, models,
+      provider: source.id, address, key, models,
       portions: Number(fields.get('portions')), perPerson: Number(fields.get('perPerson')),
       total: Number(fields.get('total')), days: Number(fields.get('days'))
     });

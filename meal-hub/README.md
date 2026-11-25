@@ -1,6 +1,6 @@
 # 大锅饭兑换服务
 
-独立部署此 Worker。眠花糖机仍由原来的网页提供界面。部署前在 Wrangler 配置里将 MEAL_ORIGIN 设为实际网页的 origin 并在 MEAL_PROVIDERS 配置上线前核对过的 OpenAI 兼容服务商。值的结构例如：
+独立部署此 Worker。眠花糖机仍由原来的网页提供界面。部署前在 Wrangler 配置里将 MEAL_ORIGIN 设为实际网页的 origin 并通过 Worker 的 MEAL_PROVIDERS Secret 配置上线前核对过的 OpenAI 兼容服务商。值的结构例如：
 
 ```json
 {"example":{"name":"示例服务商","url":"https://api.example.com/v1"}}
@@ -8,7 +8,7 @@
 
 服务商地址不应带查询参数、账号、密钥或末尾的 chat/completions。已发出的码通过服务商 ID 查找上游，因此不要将已有 ID 重新指向另一家服务商。
 
-用 Cloudflare 账号运行 `npx wrangler secret put MEAL_SECRET` 写入至少 32 字符的随机秘密，再运行 `npx wrangler deploy`。保持该秘密稳定，否则旧兑换码加密的 Key 无法继续使用。部署后把 Worker 的 HTTPS 地址填进 index.html 的 mphone-meal-service 元标签，按项目惯例升级网页缓存版本后发布。仓库不需要保存任何真实密钥。
+用 Cloudflare 账号运行 `npx wrangler secret put MEAL_SECRET` 写入至少 32 字符的随机秘密，再运行 `npx wrangler deploy`。保持该秘密稳定，否则旧兑换码加密的 Key 无法继续使用。部署后把 Worker 的 HTTPS 地址填进 index.html 的 mphone-meal-service 元标签，按项目惯例升级网页缓存版本后发布。仓库不需要保存任何真实密钥。兑换数据到期由后台自动删除，整张码用完或手动关闭时提前清除保存的 Key。
 
 开发时可用 `npx wrangler dev`，将 MEAL_ORIGIN 临时设置为本地网页 origin。配置先使用模拟服务商验证领用和计次。
 

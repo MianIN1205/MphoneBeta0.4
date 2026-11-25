@@ -163,8 +163,8 @@ export class Meal {
       await this.storage.transaction(async tx => {
         if (await tx.get('pot')) throw new Error('collision');
         await tx.put('pot', pot);
+        await tx.setAlarm(pot.expires);
       });
-      await this.storage.setAlarm(pot.expires + DAY);
       return Response.json({});
     }
     const digest = token ? await hash(token) : '';
@@ -207,6 +207,7 @@ export class Meal {
       claim.lastRequest = now;
       claim.remaining--;
       current.remaining--;
+      if (current.remaining === 0) delete current.key;
       await tx.put(claimKey, claim);
       await tx.put('pot', current);
       return { url: provider.url, key: upstreamKey };
