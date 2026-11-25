@@ -329,16 +329,36 @@ async function mealInspect() {
     const existing = mealActiveCredential(code);
     mealClaimReview.replaceChildren();
     mealClaimReview.hidden = false;
-    const description = document.createElement('div');
-    const models = document.createElement('div');
-    const privacy = document.createElement('div');
+    const facts = document.createElement('dl');
+    facts.className = 'meal-claim-facts';
+    const expiry = new Intl.DateTimeFormat('zh-CN', {
+      year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit'
+    }).format(summary.expires);
+    [['食材来源（服务商）', summary.provider], ['每份请求上限', summary.perPerson + ' 次'], ['有效期至', expiry]].forEach(([label, value]) => {
+      const term = document.createElement('dt');
+      const detail = document.createElement('dd');
+      term.textContent = label;
+      detail.textContent = value;
+      facts.append(term, detail);
+    });
+
+    const models = document.createElement('details');
+    models.className = 'setting-fold meal-claim-models';
+    const modelHeading = document.createElement('summary');
+    modelHeading.textContent = '可用模型（' + summary.models.length + '）';
+    const modelList = document.createElement('ul');
+    summary.models.forEach(id => {
+      const item = document.createElement('li');
+      item.textContent = id;
+      modelList.append(item);
+    });
+    models.append(modelHeading, modelList);
+
+    const privacy = document.createElement('p');
+    privacy.className = 'auto-hint meal-claim-note';
+    privacy.textContent = (summary.sharedBalance ? '领取者共用站内余额，由服务商扣费。' : '') +
+      '聊天内容和附件会经过大锅饭后台和服务商。';
     const confirm = document.createElement('button');
-    description.textContent = '食材来源（服务商） · ' + summary.provider +
-      '　每份最多 ' + summary.perPerson + ' 次请求　' + new Date(summary.expires).toLocaleString() + ' 到期' +
-      (summary.sharedBalance ? '。所有领取者共用同一份站内余额，由站点扣费。' : '');
-    models.textContent = '模型 · ' + summary.models.join(' / ');
-    privacy.className = 'auto-hint';
-    privacy.textContent = '使用时，聊天上下文及随请求发送的图片或语音会经过兑换后台，再发给这家服务商。';
     confirm.type = 'button';
     confirm.className = 'action-btn btn-apply';
     confirm.textContent = existing ? '打开已领取预设' : '领取并保存为测试 API 预设';
@@ -369,7 +389,7 @@ async function mealInspect() {
         if (mealInspectedCode === code) mealClaimNotice.textContent = error.message || '领取失败，请重试。';
       }
     }));
-    mealClaimReview.append(description, models, privacy, confirm);
+    mealClaimReview.append(facts, models, privacy, confirm);
   } catch (error) {
     if (request === mealInspectRequest) mealClaimNotice.textContent = error.status ? error.message : '暂时查不到兑换码，请点「查询兑换码」重试。';
   } finally {

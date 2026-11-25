@@ -776,3 +776,42 @@ textarea.field-input { resize: vertical; font-family: inherit; line-height: 1.5;
 .meal-owned .action-btn { margin: 4px 5px 0 0; }
 .meal-api-controls { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
 .meal-section #mealNotice:not(:empty) { margin-top: 8px; }
+
+.meal-claim-review {
+  gap: 10px;
+  padding: 12px;
+  border: 1px solid rgba(179, 114, 126, 0.18);
+  border-radius: 12px;
+}
+.meal-claim-facts {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 6px 10px;
+  align-items: baseline;
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.45;
+}
+.meal-claim-facts dt { font-weight: 400; }
+.meal-claim-facts dd { margin: 0; text-align: end; font-weight: 600; overflow-wrap: anywhere; }
+.meal-claim-models {
+  min-width: 0;
+  border-block: 1px solid rgba(179, 114, 126, 0.18);
+}
+.meal-claim-models ul {
+  max-height: 9rem;
+  margin: 0;
+  padding: 0;
+  overflow: auto;
+  list-style: none;
+}
+.meal-claim-models li {
+  padding: 5px 2px;
+  font-size: 12px;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+.meal-claim-models li + li { border-top: 1px solid rgba(179, 114, 126, 0.12); }
+.meal-claim-review .meal-claim-note { margin: 0; line-height: 1.5; }
+.meal-claim-review > .action-btn { justify-self: stretch; min-height: 44px; }
+#mealClaimNotice:empty { display: none; }
