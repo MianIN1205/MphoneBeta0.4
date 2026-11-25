@@ -13,13 +13,11 @@ var WN_INTRO = [
   '· 记得常备份：iPhone 删掉桌面图标会连数据一起清空'
 ];
 var WN_NOTES = [
-  { v: 167, d: '11月25日', items: ['大锅饭兑换服务已接通，首批支持芙卡。放饭时可直接获取模型列表。'] },
+  { v: 168, d: '11月25日', items: ['缩短启动页过渡，桌面就绪后更快显示更新提示。'] },
+  { v: 167, d: '11月25日', items: ['大锅饭兑换服务已接通。放饭时可直接获取模型列表，发码时会核对接口地址。'] },
   { v: 165, d: '11月25日', items: ['「设置 → 主 API」底部加入大锅饭入口。兑换服务接通后，可私发兑换码、多人领取测试次数。'] },
   { v: 160, d: '11月24日', items: ['0.4 网页使用独立的本地数据。可从 0.3 导出整机备份，在 0.4 恢复。'] },
   { v: 159, d: '11月24日', items: ['升级时一次性清除旧的图片和语音拒收记录，保留测试通过的结果。新的拒收记录仍独立保留 24 小时。'] },
-  { v: 158, d: '11月24日', items: ['图片和语音的接口拒收记录独立保留 24 小时，过期后恢复默认判断。设置里测试通过可提前恢复对应附件。'] },
-  { v: 157, d: '11月24日', items: ['私聊和剧情只随本轮新消息发送原图、原音。旧附件平时带保存的描述或转写，引用时可重新附上原件。'] },
-  { v: 156, d: '11月24日', items: ['图片和紧随的提问一起发送。主 API 可测试聊天发图，提示词里可查看最近一次请求附带的原图和原音数量。', '提示词里的语音和图片直接展示听写来源和看图记录。展开聊天语音的转写时，页面留在原位。', '切换窗口后，「＋」菜单从第一页打开。'] },
 ];
 
 // 好几次更新没看：合成一个，按日期排成时间线（同一天的放一起，新的在上面；用户要的，不一条条弹、也不只弹最后一次）
@@ -53,9 +51,7 @@ function wnShow(title, lines, okText, offText, onOff) {
   (document.querySelector('.phone') || document.body).appendChild(ov);
 }
 // 打开时看一次：没看过介绍 → 介绍（带上这次的更新）；看过 → 只说比上次新的那几条
-function wnCheck(tries) {
-  var br = document.getElementById('backupRemindOverlay');
-  if (br && br.classList.contains('open')) { if ((tries || 0) < 30) setTimeout(function() { wnCheck((tries || 0) + 1); }, 2000); return; }   // 等备份提醒关了再弹
+function wnCheck() {
   var cur = parseInt(MPHONE_V, 10), seen = parseInt(wnGet('mphoneSeenV'), 10);
   var fresh = WN_NOTES.filter(function(n) { return !(n.v <= seen); });
   if (seen >= cur) return;
@@ -68,7 +64,18 @@ function wnCheck(tries) {
   if (!fresh.length || wnGet('mphoneNoteOff')) return;
   wnShow('小手机更新了', wnTimeline(fresh), '确认', '拒收', function() { wnSetEnabled(false); showToast('之后不会再弹了，设置 → 辅助功能里能再打开', 'plain'); });
 }
-onMphoneReady(function() { setTimeout(wnCheck, 2500); });
+onMphoneReady(function() {
+  mphoneBootVisible.then(function() {
+    var reminder = document.getElementById('backupRemindOverlay');
+    if (!reminder || !reminder.classList.contains('open')) { wnCheck(); return; }
+    var observer = new MutationObserver(function() {
+      if (reminder.classList.contains('open')) return;
+      observer.disconnect();
+      wnCheck();
+    });
+    observer.observe(reminder, { attributes: true, attributeFilter: ['class'] });
+  });
+});
 
 // 设置 → 辅助功能：更新后告诉我 / 再看一次介绍
 (function() {

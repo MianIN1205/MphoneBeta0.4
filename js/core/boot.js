@@ -15,7 +15,7 @@ document.body.classList.toggle('phone-fullscreen', mphoneInitialFull);
 
 // 版本号：index.html 里的样式、boot.js 和下面加载的脚本网址都带 ?v=这个数，sw.js 里也是同一个（改了东西推之前跑 tools/bump-version.py 一起加一）。
 // 这样新的页面只会要新版本的文件、旧页面只要旧的，不会像以前网慢时那样新页面配上手机里存的旧脚本（外观里图标预设空着，用户遇到过）
-var MPHONE_V = '167';
+var MPHONE_V = '168';
 // 存储就绪后，按顺序加载各功能脚本（普通脚本，直接打开本地文件也能用）
 var MPHONE_SCRIPTS = [
   "js/core/utils.js",
@@ -124,17 +124,21 @@ var MPHONE_SCRIPTS = [
 var mphoneReadyFns = [];
 function onMphoneReady(fn) { mphoneReadyFns.push(fn); }
 
-// 载入页：加载完淡出；至少停留一小会儿免得一闪而过，万一卡住 10 秒后也收起来
-var bootSplashStart = Date.now();
+// 桌面就绪后马上让载入页淡出，弹窗等桌面露出再检查。
+var finishBootReveal;
+var mphoneBootVisible = new Promise(function(resolve) { finishBootReveal = resolve; });
 function hideBootSplash() {
+  clearTimeout(bootSplashFallback);
   var el = document.getElementById('bootSplash');
-  if (!el || el.classList.contains('hide')) return;
+  if (!el) { finishBootReveal(); return; }
+  if (el.classList.contains('hide')) return;
+  el.classList.add('hide');
   setTimeout(function() {
-    el.classList.add('hide');
-    setTimeout(function() { el.remove(); }, 450);
-  }, Math.max(0, 600 - (Date.now() - bootSplashStart)));
+    el.remove();
+    finishBootReveal();
+  }, 200);
 }
-setTimeout(hideBootSplash, 10000);
+var bootSplashFallback = setTimeout(hideBootSplash, 10000);
 
 mphoneStore.init().then(function() {
   MPHONE_SCRIPTS.forEach(function(src, i) {

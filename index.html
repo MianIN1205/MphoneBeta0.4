@@ -21,7 +21,7 @@
       position: fixed; inset: 0; z-index: 99999;
       display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px;
       background: linear-gradient(160deg, #FFE6EF 0%, #F6E7F6 48%, #DFE7FB 100%);
-      transition: opacity 0.4s ease;
+      transition: opacity 0.18s ease;
     }
     #bootSplash.hide { opacity: 0; pointer-events: none; }
     /* logo 沿着轮廓发一圈柔柔的白光，再带一点淡紫的影子，和渐变背景分开层次 */
@@ -33,50 +33,50 @@
     #bootSplash .boot-sub { font-size: 12px; letter-spacing: 1px; color: #a594b0; }
   </style>
   <!-- 样式：按功能分在 core / desk / settings / chat / char / prompt 文件夹里；顺序不能乱（后面的覆盖前面的） -->
-  <link rel="stylesheet" href="css/core/base.css?v=167">
-  <link rel="stylesheet" href="css/core/app-screen.css?v=167">
-  <link rel="stylesheet" href="css/core/controls.css?v=167">
-  <link rel="stylesheet" href="css/core/avatar.css?v=167">
-  <link rel="stylesheet" href="css/core/image-picker.css?v=167">
-  <link rel="stylesheet" href="css/desk/statusbar.css?v=167">
-  <link rel="stylesheet" href="css/desk/desktop.css?v=167">
-  <link rel="stylesheet" href="css/desk/iconsets.css?v=167">
-  <link rel="stylesheet" href="css/desk/widgets.css?v=167">
-  <link rel="stylesheet" href="css/desk/appearance.css?v=167">
-  <link rel="stylesheet" href="css/desk/bookshelf.css?v=167">
-  <link rel="stylesheet" href="css/settings/settings.css?v=167">
-  <link rel="stylesheet" href="css/settings/mcp.css?v=167">
-  <link rel="stylesheet" href="css/desk/desk-apps.css?v=167">
-  <link rel="stylesheet" href="css/desk/memory-lib.css?v=167">
-  <link rel="stylesheet" href="css/core/dialogs.css?v=167">
-  <link rel="stylesheet" href="css/chat/tabs.css?v=167">
-  <link rel="stylesheet" href="css/chat/header.css?v=167">
-  <link rel="stylesheet" href="css/chat/contacts.css?v=167">
-  <link rel="stylesheet" href="css/chat/list.css?v=167">
-  <link rel="stylesheet" href="css/chat/new-chat.css?v=167">
-  <link rel="stylesheet" href="css/chat/feed.css?v=167">
-  <link rel="stylesheet" href="css/char/settings.css?v=167">
-  <link rel="stylesheet" href="css/chat/mine.css?v=167">
-  <link rel="stylesheet" href="css/chat/room.css?v=167">
-  <link rel="stylesheet" href="css/chat/messages.css?v=167">
-  <link rel="stylesheet" href="css/chat/msg-menu.css?v=167">
-  <link rel="stylesheet" href="css/chat/msg-ops.css?v=167">
-  <link rel="stylesheet" href="css/chat/calendar.css?v=167">
-  <link rel="stylesheet" href="css/chat/quick-bar.css?v=167">
-  <link rel="stylesheet" href="css/chat/status-panel.css?v=167">
-  <link rel="stylesheet" href="css/chat/stickers.css?v=167">
-  <link rel="stylesheet" href="css/char/look.css?v=167">
-  <link rel="stylesheet" href="css/char/assistant.css?v=167">
-  <link rel="stylesheet" href="css/prompt/prompt.css?v=167">
-  <link rel="stylesheet" href="css/desk/pet.css?v=167">
-  <link rel="stylesheet" href="css/chat/file-send.css?v=167">
-  <link rel="stylesheet" href="css/chat/peek.css?v=167">
-  <link rel="stylesheet" href="css/desk/places.css?v=167">
-  <link rel="stylesheet" href="css/desk/blindbox.css?v=167">
-  <link rel="stylesheet" href="css/chat/group.css?v=167">
-  <link rel="stylesheet" href="css/desk/books.css?v=167">
-  <link rel="stylesheet" href="css/desk/pair-notes.css?v=167">
-  <link rel="stylesheet" href="css/desk/tarot.css?v=167">
+  <link rel="stylesheet" href="css/core/base.css?v=168">
+  <link rel="stylesheet" href="css/core/app-screen.css?v=168">
+  <link rel="stylesheet" href="css/core/controls.css?v=168">
+  <link rel="stylesheet" href="css/core/avatar.css?v=168">
+  <link rel="stylesheet" href="css/core/image-picker.css?v=168">
+  <link rel="stylesheet" href="css/desk/statusbar.css?v=168">
+  <link rel="stylesheet" href="css/desk/desktop.css?v=168">
+  <link rel="stylesheet" href="css/desk/iconsets.css?v=168">
+  <link rel="stylesheet" href="css/desk/widgets.css?v=168">
+  <link rel="stylesheet" href="css/desk/appearance.css?v=168">
+  <link rel="stylesheet" href="css/desk/bookshelf.css?v=168">
+  <link rel="stylesheet" href="css/settings/settings.css?v=168">
+  <link rel="stylesheet" href="css/settings/mcp.css?v=168">
+  <link rel="stylesheet" href="css/desk/desk-apps.css?v=168">
+  <link rel="stylesheet" href="css/desk/memory-lib.css?v=168">
+  <link rel="stylesheet" href="css/core/dialogs.css?v=168">
+  <link rel="stylesheet" href="css/chat/tabs.css?v=168">
+  <link rel="stylesheet" href="css/chat/header.css?v=168">
+  <link rel="stylesheet" href="css/chat/contacts.css?v=168">
+  <link rel="stylesheet" href="css/chat/list.css?v=168">
+  <link rel="stylesheet" href="css/chat/new-chat.css?v=168">
+  <link rel="stylesheet" href="css/chat/feed.css?v=168">
+  <link rel="stylesheet" href="css/char/settings.css?v=168">
+  <link rel="stylesheet" href="css/chat/mine.css?v=168">
+  <link rel="stylesheet" href="css/chat/room.css?v=168">
+  <link rel="stylesheet" href="css/chat/messages.css?v=168">
+  <link rel="stylesheet" href="css/chat/msg-menu.css?v=168">
+  <link rel="stylesheet" href="css/chat/msg-ops.css?v=168">
+  <link rel="stylesheet" href="css/chat/calendar.css?v=168">
+  <link rel="stylesheet" href="css/chat/quick-bar.css?v=168">
+  <link rel="stylesheet" href="css/chat/status-panel.css?v=168">
+  <link rel="stylesheet" href="css/chat/stickers.css?v=168">
+  <link rel="stylesheet" href="css/char/look.css?v=168">
+  <link rel="stylesheet" href="css/char/assistant.css?v=168">
+  <link rel="stylesheet" href="css/prompt/prompt.css?v=168">
+  <link rel="stylesheet" href="css/desk/pet.css?v=168">
+  <link rel="stylesheet" href="css/chat/file-send.css?v=168">
+  <link rel="stylesheet" href="css/chat/peek.css?v=168">
+  <link rel="stylesheet" href="css/desk/places.css?v=168">
+  <link rel="stylesheet" href="css/desk/blindbox.css?v=168">
+  <link rel="stylesheet" href="css/chat/group.css?v=168">
+  <link rel="stylesheet" href="css/desk/books.css?v=168">
+  <link rel="stylesheet" href="css/desk/pair-notes.css?v=168">
+  <link rel="stylesheet" href="css/desk/tarot.css?v=168">
 </head>
 <body class="phone-fullscreen">
   <!-- 载入页：脚本全部加载完后淡出（见 js/core/boot.js） -->
@@ -4497,7 +4497,7 @@
   </div>
 
   <!-- 程序入口：先准备存储，再按顺序加载 js/ 里的各功能脚本 -->
-  <script src="js/core/store.js?v=167" defer></script>
-  <script src="js/core/boot.js?v=167" defer></script>
+  <script src="js/core/store.js?v=168" defer></script>
+  <script src="js/core/boot.js?v=168" defer></script>
 </body>
 </html>

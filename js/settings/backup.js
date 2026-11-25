@@ -300,6 +300,6 @@ dockSettings.addEventListener('click', function() { paintBackupLast(); paintClou
 paintBackupLast();
 paintCloudStatus();
 onMphoneReady(function() {
-  setTimeout(checkBackupRemind, 1500);
+  mphoneBootVisible.then(checkBackupRemind);
   if (backupMeta.cloudOn && backupMeta.lastChange > backupMeta.lastCloud) scheduleCloudBackup();
 });
