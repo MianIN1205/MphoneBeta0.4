@@ -26,35 +26,39 @@ function llmProvider(cfg) {
 }
 function llmModelName(cfg) { return String(cfg.model || '').toLowerCase(); }
 
-var LLM_MEDIA_SUPPORT_KEY = 'mphone_media_support_v2';
-var MEDIA_REJECT_EXPIRE = 24 * 60 * 60 * 1000;
-// 升级时只继承通过的能力记录。新键写入后，重新打开不会再清理新的拒收记录。
-var llmMediaSupport = (function() {
-  var current = mphoneStore.load(LLM_MEDIA_SUPPORT_KEY, null);
-  if (current) return current;
-  var previousMediaSupport = mphoneStore.load('mphone_media_support', {}) || {};
-  var migrated = {};
-  Object.keys(previousMediaSupport).forEach(function(key) {
-    var entry = previousMediaSupport[key];
-    if (!entry || (entry.image !== true && entry.audio !== true)) return;
-    var supported = {};
-    if (entry.image === true) supported.image = true;
-    if (entry.audio === true) supported.audio = true;
-    migrated[key] = supported;
-  });
-  mphoneStore.save(LLM_MEDIA_SUPPORT_KEY, migrated);
-  return migrated;
+var LLM_MEDIA_SUPPORT_KEY = 'mphone_media_support';
+var MEDIA_REJECT_EXPIRE = 2 * 60 * 60 * 1000;
+var MEDIA_REJECT_THRESHOLD = 2;   // 连续失败几次才标记为不支持
+var llmMediaSupport = mphoneStore.load(LLM_MEDIA_SUPPORT_KEY, {}) || {};
+// 版本更新时清除所有媒体能力标记，让模型重新检测
+(function() {
+  var prev = mphoneStore.load('mphone_media_support_ver', '');
+  if (prev !== MPHONE_V) {
+    llmMediaSupport = {};
+    mphoneStore.save(LLM_MEDIA_SUPPORT_KEY, llmMediaSupport);
+    mphoneStore.save('mphone_media_support_ver', MPHONE_V);
+  }
+  // 清理旧 v2 key
+  mphoneStore.save('mphone_media_support_v2', null);
 })();
+function llmClearMediaSupport() {
+  llmMediaSupport = {};
+  mphoneStore.save(LLM_MEDIA_SUPPORT_KEY, llmMediaSupport);
+}
 function llmMediaKey(cfg) {
   return JSON.stringify([String(cfg.url || '').trim().replace(/\/+$/, ''), cfg.model]);
 }
 function llmRememberMedia(cfg, support) {
   var key = llmMediaKey(cfg);
-  var entry = Object.assign({}, llmMediaSupport[key], support), now = Date.now();
-  if (support.image === false) entry._imageAt = now;
-  else if (support.image === true) delete entry._imageAt;
-  if (support.audio === false) entry._audioAt = now;
-  else if (support.audio === true) delete entry._audioAt;
+  var entry = Object.assign({}, llmMediaSupport[key]), now = Date.now();
+  if (support.image === false) {
+    entry._imageFails = (entry._imageFails || 0) + 1;
+    if (entry._imageFails >= MEDIA_REJECT_THRESHOLD) { entry.image = false; entry._imageAt = now; }
+  } else if (support.image === true) { entry.image = true; delete entry._imageAt; delete entry._imageFails; }
+  if (support.audio === false) {
+    entry._audioFails = (entry._audioFails || 0) + 1;
+    if (entry._audioFails >= MEDIA_REJECT_THRESHOLD) { entry.audio = false; entry._audioAt = now; }
+  } else if (support.audio === true) { entry.audio = true; delete entry._audioAt; delete entry._audioFails; }
   llmMediaSupport[key] = entry;
   mphoneStore.save(LLM_MEDIA_SUPPORT_KEY, llmMediaSupport);
 }
@@ -458,7 +462,7 @@ function llmRequest(msgs, opts) {
     return attempt(Object.assign({}, caps, rejected), false).then(function(text) {
       llmRememberMedia(cfg, rejected);
       var kinds = Object.keys(rejected).map(function(kind) { return kind === 'image' ? '图片' : '音频'; });
-      showToast('当前接口拒收' + kinds.join('和') + '，已用文字发送。结果保留 24 小时，可在设置里重新测试。', 'plain');
+      showToast('当前接口拒收' + kinds.join('和') + '，已用文字发送。连续失败 2 次后暂停 2 小时，可在设置里手动重置。', 'plain');
       return text;
     });
   }

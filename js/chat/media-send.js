@@ -218,9 +218,9 @@ function mediaTestImage(asChat) {
   }, function(err) { mediaTestResult('✗ ' + label + '请求失败：' + err.message, false); });
 }
 document.getElementById('mediaTestImgBtn').addEventListener('click', function() { mediaTestImage(false); });
-document.getElementById('mediaTestChatImgBtn').addEventListener('click', function() {
-  if (!mediaCfg.vision) return mediaTestResult('请先打开「发送真实图片」，再测试聊天发图。', false);
-  mediaTestImage(true);
+document.getElementById('mediaClearBtn').addEventListener('click', function() {
+  llmClearMediaSupport();
+  showToast('✓ 已重置所有媒体能力记录，下次发送时重新检测', 'success');
 });
 document.getElementById('mediaTestAudioBtn').addEventListener('click', function() {
   var cfg = readDraftApiConfig();
