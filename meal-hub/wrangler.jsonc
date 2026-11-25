@@ -1,0 +1,11 @@
+{
+  "name": "mphone-meal",
+  "main": "src/index.mjs",
+  "compatibility_date": "2025-06-01",
+  "vars": {
+    "MEAL_ORIGIN": "https://mianin1205.github.io",
+    "MEAL_PROVIDERS": "{}"
+  },
+  "durable_objects": { "bindings": [{ "name": "MEALS", "class_name": "Meal" }] },
+  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["Meal"] }]
+}

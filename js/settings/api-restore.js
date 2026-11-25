@@ -9,12 +9,14 @@ function refreshApiModels(openPopup, keepSelection) {
   if (refreshBtn.classList.contains('spinning')) return;
   var cfg = readDraftApiConfig();
   if (!cfg.url || !cfg.key) {
-    showToast('请先填接口地址和 API 密钥', 'plain');
+    showToast(cfg.mealCode ? '兑换码已失效' : '请先填接口地址和 API 密钥', 'plain');
     return;
   }
   var request = ++apiModelRequest;
   refreshBtn.classList.add('spinning');
-  llmListModels(cfg.url, cfg.key).then(function(models) {
+  var claimed = cfg.mealCode && mealActiveCredential(cfg.mealCode);
+  var requestModels = claimed ? Promise.resolve(claimed.models) : llmListModels(cfg.url, cfg.key);
+  requestModels.then(function(models) {
     if (request !== apiModelRequest) return;
     if (!models.length) throw new Error('接口没有返回模型');
     modelPopup.replaceChildren();

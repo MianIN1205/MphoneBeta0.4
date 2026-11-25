@@ -3,7 +3,7 @@
 // 只处理本站文件，AI / 语音 / 生图等外部接口请求完全不经过这里。
 
 // 文件拆分后 css/、js/ 也要预先缓存；改动这个列表时把版本号加一
-const V = '164';   // 和 index.html、js/core/boot.js 里的版本号一样，用 tools/bump-version.py 一起改
+const V = '165';   // 和 index.html、js/core/boot.js 里的版本号一样，用 tools/bump-version.py 一起改
 const SCOPE = new URL(self.registration.scope);
 const CACHE_PREFIX = SCOPE.pathname === '/' ? 'mphone-v' : 'mphone:' + SCOPE.pathname + ':v';
 const CACHE = CACHE_PREFIX + V;
@@ -23,7 +23,7 @@ const JS = ['core/store', 'core/boot', 'core/utils', 'core/backup-format', 'desk
             'settings/data', 'settings/api-restore', 'chat/history', 'chat/history-read', 'chat/prompt', 'chat/render',
             'chat/reply', 'chat/input', 'chat/voice', 'chat/room-lists', 'chat/private-plus', 'chat/mine',
             'chat/feed', 'char/auto', 'char/summary', 'char/backup', 'char/import',
-            'desk/memory-open', 'desk/memory-hub', 'settings/media-api', 'chat/wallet-fav', 'chat/msg-menu', 'chat/media-send', 'chat/file-send', 'chat/compose-plus', 'chat/img-use', 'char/look-share', 'desk/desk-icons', 'chat/msg-shot', 'char/css-preview', 'chat/peek',
+            'desk/memory-open', 'desk/memory-hub', 'settings/media-api', 'settings/meal', 'chat/wallet-fav', 'chat/msg-menu', 'chat/media-send', 'chat/file-send', 'chat/compose-plus', 'chat/img-use', 'char/look-share', 'desk/desk-icons', 'chat/msg-shot', 'char/css-preview', 'chat/peek',
             'core/image-viewer', 'char/assistant', 'settings/assist', 'core/llm', 'core/mcp', 'core/mcp-builtin',
             'desk/gallery', 'desk/anniv', 'desk/diary', 'desk/widgets', 'char/memory',
             'desk/memory-lib', 'desk/memory-import', 'chat/quick-bar', 'chat/status-panel', 'chat/stickers', 'chat/msg-ops',

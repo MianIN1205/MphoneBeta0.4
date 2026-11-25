@@ -1,0 +1,269 @@
+// 大锅饭凭证单独保存在浏览器，预设与整机备份只记录兑换编号。
+const mealBase = (document.querySelector('meta[name="mphone-meal-service"]').content || '').trim().replace(/\/+$/, '');
+const mealCodePattern = /^[a-f0-9]{32}$/;
+const mealTokenPattern = /^[a-f0-9]{64}$/;
+const mealIdentityKey = 'mphoneMealBrowser';
+const mealDraftBlocks = document.getElementById('mealSection');
+const mealIssueForm = document.getElementById('mealIssueForm');
+const mealClaimForm = document.getElementById('mealClaimForm');
+const mealPresetPick = document.getElementById('mealPresetPick');
+const mealModels = document.getElementById('mealModels');
+const mealSource = document.getElementById('mealSource');
+const mealNotice = document.getElementById('mealNotice');
+const mealCodeInput = document.getElementById('mealCodeInput');
+const mealClaimReview = document.getElementById('mealClaimReview');
+const mealIssued = document.getElementById('mealIssued');
+const mealHelpers = document.getElementById('mealApiHint');
+let mealIssueSource = null;
+let mealInspectedCode = '';
+let mealIssuerRequest = 0;
+
+function mealRemember(key, value) {
+  if (value !== undefined) mphoneLocal.setItem(key, JSON.stringify(value));
+  try { return JSON.parse(mphoneLocal.getItem(key) || 'null'); } catch (_) { return null; }
+}
+function mealActiveCredential(code) {
+  const claim = mealCodePattern.test(code) && mealRemember('mphoneMealClaim:' + code);
+  return claim && mealTokenPattern.test(claim.token) ? claim : null;
+}
+function mealConfig(cfg, code) {
+  const claim = mealActiveCredential(code);
+  return Object.assign(cfg, { mealCode: code, url: claim ? mealBase : '', key: claim ? code + '.' + claim.token : '' });
+}
+function mealPersistentConfig(cfg) {
+  return cfg.mealCode ? Object.assign({}, cfg, { url: '', key: '' }) : Object.assign({}, cfg);
+}
+async function mealRequest(path, body, bearer) {
+  if (!mealBase) throw new Error('醞酿中，兑换服务尚未配置。');
+  const response = await fetch(mealBase + path, {
+    method: 'POST', cache: 'no-store', credentials: 'omit', redirect: 'error',
+    headers: Object.assign({ 'Content-Type': 'application/json' }, bearer ? { Authorization: 'Bearer ' + bearer } : {}),
+    body: JSON.stringify(body)
+  });
+  const result = await response.json();
+  if (!response.ok) {
+    const error = new Error(result.error?.message || '兑换服务暂时不可用');
+    error.status = response.status;
+    throw error;
+  }
+  return result;
+}
+const mealStateLabel = { expired: '已到期', spent: '次数已用完', closed: '发码者已关闭', missing: '此浏览器没有领取凭证' };
+
+function mealShowConfig(code, state, summary) {
+  const locked = !!code;
+  const label = !locked ? '' : state === 'active' ? '正在使用兑换码' : '兑换码已失效';
+  [apiUrlInput, apiKey].forEach(input => {
+    input.disabled = locked;
+    if (locked) input.placeholder = label;
+    else input.placeholder = input.dataset.directPlaceholder;
+  });
+  eyeBtn.disabled = locked;
+  document.getElementById('mealApiControls').hidden = !locked;
+  if (locked) mealHelpers.textContent = summary && state === 'active'
+    ? '食材来源（服务商） · ' + summary.provider + '　剩余 ' + Math.min(summary.personalRemaining, summary.remaining) + ' 次'
+    : mealStateLabel[state] || '';
+}
+function mealCheckConfig(code) {
+  const saved = mealActiveCredential(code);
+  const state = saved && saved.expires <= Date.now() && saved.state === 'active' ? 'expired' : saved?.state;
+  mealShowConfig(code, state || 'missing', saved);
+  if (!saved || !mealBase) return;
+  mealRequest('/status', {}, code + '.' + saved.token).then(summary => {
+    const claim = mealRemember('mphoneMealClaim:' + code, Object.assign(summary, { token: saved.token }));
+    if (draftMealCode === code) mealShowConfig(code, claim.state, claim);
+  }).catch(error => {
+    if (error.status !== 410 && error.status !== 403) return;
+    const claim = mealRemember('mphoneMealClaim:' + code, Object.assign(saved, { state: 'expired' }));
+    if (draftMealCode === code) mealShowConfig(code, claim.state, claim);
+  });
+}
+async function mealBrowserToken(code) {
+  let seed = mealRemember(mealIdentityKey);
+  if (!mealTokenPattern.test(seed)) {
+    seed = Array.from(crypto.getRandomValues(new Uint8Array(32)), n => n.toString(16).padStart(2, '0')).join('');
+    mealRemember(mealIdentityKey, seed);
+  }
+  const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(code + '.' + seed));
+  return Array.from(new Uint8Array(digest), n => n.toString(16).padStart(2, '0')).join('');
+}
+function mealSetNotice(text) {
+  mealNotice.textContent = text;
+}
+function mealBusy(button, operation) {
+  if (button.disabled) return;
+  button.disabled = true;
+  mealSetNotice('');
+  Promise.resolve().then(operation).catch(error => mealSetNotice(error.message || '操作失败，请稍后再试。'))
+    .finally(() => { button.disabled = false; });
+}
+function mealRenderPresets() {
+  mealPresetPick.replaceChildren(new Option('请选择自己保存的 API 预设', ''));
+  apiPresets.forEach((preset, index) => {
+    if (preset?.url && preset.key && !preset.mealCode) mealPresetPick.add(new Option(preset.name, index));
+  });
+}
+function mealFillModels(ids, selected) {
+  mealModels.replaceChildren();
+  [...new Set(ids.filter(Boolean))].forEach(id => {
+    const field = document.createElement('label');
+    const checkbox = document.createElement('input');
+    checkbox.type = 'checkbox';
+    checkbox.value = id;
+    checkbox.checked = id === selected;
+    field.append(checkbox, document.createTextNode(' ' + id));
+    mealModels.append(field);
+  });
+}
+mealPresetPick.addEventListener('change', async () => {
+  const request = ++mealIssuerRequest;
+  const preset = mealPresetPick.value === '' ? null : apiPresets[Number(mealPresetPick.value)];
+  mealIssueSource = null;
+  mealSource.textContent = '';
+  mealModels.replaceChildren();
+  if (!preset) return;
+  try {
+    const source = await mealRequest('/source', { address: preset.url });
+    if (request !== mealIssuerRequest) return;
+    mealIssueSource = source;
+    mealSource.textContent = '食材来源（服务商） · ' + source.name;
+    mealFillModels([preset.model], preset.model);
+  } catch (error) {
+    if (request === mealIssuerRequest) mealSource.textContent = error.message;
+  }
+});
+document.getElementById('mealLoadModels').addEventListener('click', event => {
+  mealBusy(event.currentTarget, async () => {
+    if (!mealIssueSource) throw new Error('请先选择受支持的 API 预设。');
+    const index = mealPresetPick.value;
+    const preset = apiPresets[Number(index)];
+    const ids = await llmListModels(preset.url, preset.key);
+    if (mealPresetPick.value === index) mealFillModels([preset.model, ...ids], preset.model);
+  });
+});
+
+mealIssueForm.addEventListener('submit', event => {
+  event.preventDefault();
+  const fields = new FormData(mealIssueForm);
+  const models = [...mealModels.querySelectorAll('input:checked')].map(input => input.value);
+  const preset = mealPresetPick.value === '' ? null : apiPresets[Number(mealPresetPick.value)];
+  mealBusy(event.submitter, async () => {
+    if (!mealIssueSource || !preset || !models.length) throw new Error('请选一个可用的 API 预设和至少一个模型。');
+    const made = await mealRequest('/create', {
+      provider: mealIssueSource.id, address: preset.url, key: preset.key, models,
+      portions: Number(fields.get('portions')), perPerson: Number(fields.get('perPerson')),
+      total: Number(fields.get('total')), days: Number(fields.get('days'))
+    });
+    const owned = mealRemember('mphoneMealOwned') || [];
+    mealRemember('mphoneMealOwned', [...owned, { code: made.code, owner: made.owner, provider: made.provider }]);
+    mealRenderOwned();
+    mealSetNotice('兑换码已生成，复制后私下分享。');
+  });
+});
+
+function mealRenderOwned() {
+  mealIssued.replaceChildren();
+  (mealRemember('mphoneMealOwned') || []).forEach(pot => {
+    const row = document.createElement('div');
+    row.className = 'meal-owned';
+    const title = document.createElement('div');
+    title.textContent = pot.provider;
+    const code = document.createElement('code');
+    code.textContent = pot.code;
+    const status = document.createElement('div');
+    status.className = 'auto-hint';
+    const copy = document.createElement('button');
+    const check = document.createElement('button');
+    const close = document.createElement('button');
+    [copy, check, close].forEach(button => { button.type = 'button'; button.className = 'action-btn btn-apply'; });
+    copy.textContent = '复制码';
+    check.textContent = '查用量';
+    close.textContent = '关闭兑换';
+    copy.addEventListener('click', () => mealBusy(copy, async () => {
+      await navigator.clipboard.writeText(pot.code);
+      mealSetNotice('兑换码已复制。');
+    }));
+    function update(summary) {
+      status.textContent = '已领 ' + summary.claimed + '/' + summary.portions + ' · 共剩 ' + summary.remaining + ' 次' +
+        (mealStateLabel[summary.state] ? ' · ' + mealStateLabel[summary.state] : '');
+      close.hidden = summary.state !== 'active';
+    }
+    check.addEventListener('click', () => mealBusy(check, async () => update(await mealRequest('/owner', {}, pot.code + '.' + pot.owner))));
+    close.addEventListener('click', () => openConfirm('关闭后，已领取的测试预设也会失效。确认关闭？', () => {
+      mealBusy(close, async () => update(await mealRequest('/close', {}, pot.code + '.' + pot.owner)));
+    }));
+    row.append(title, code, status, copy, check, close);
+    mealIssued.append(row);
+  });
+}
+
+mealCodeInput.addEventListener('input', () => {
+  mealInspectedCode = '';
+  mealClaimReview.hidden = true;
+  mealClaimReview.replaceChildren();
+});
+mealClaimForm.addEventListener('submit', event => {
+  event.preventDefault();
+  mealBusy(event.submitter, async () => {
+    const code = mealCodeInput.value.trim().toLowerCase();
+    if (!mealCodePattern.test(code)) throw new Error('请检查兑换码。');
+    const summary = await mealRequest('/inspect', { code });
+    if (mealCodeInput.value.trim().toLowerCase() !== code) return;
+    const existing = mealActiveCredential(code);
+    mealClaimReview.replaceChildren();
+    mealClaimReview.hidden = false;
+    const description = document.createElement('div');
+    const models = document.createElement('div');
+    const privacy = document.createElement('div');
+    const confirm = document.createElement('button');
+    description.textContent = '食材来源（服务商） · ' + summary.provider +
+      '　每份 ' + summary.perPerson + ' 次　' + new Date(summary.expires).toLocaleString() + ' 到期';
+    models.textContent = '模型 · ' + summary.models.join(' / ');
+    privacy.className = 'auto-hint';
+    privacy.textContent = '使用时，聊天和附件会经兑换服务发送给食材来源。';
+    confirm.type = 'button';
+    confirm.className = 'action-btn btn-apply';
+    confirm.textContent = existing ? '打开已领取预设' : '领取并保存为测试 API 预设';
+    confirm.disabled = summary.state !== 'active' || (!existing && summary.claimed >= summary.portions);
+    if (confirm.disabled) mealSetNotice(mealStateLabel[summary.state] || '领取名额已满。');
+    mealInspectedCode = code;
+    confirm.addEventListener('click', () => mealBusy(confirm, async () => {
+      if (mealInspectedCode !== code) return;
+      const token = await mealBrowserToken(code);
+      const grant = await mealRequest('/claim', { code, browser: token });
+      mealRemember('mphoneMealClaim:' + code, Object.assign(grant, { token }));
+      let index = apiPresets.findIndex(preset => preset?.mealCode === code);
+      if (index < 0) {
+        const title = '测试 API · ' + grant.provider;
+        let name = title;
+        let suffix = 2;
+        while (apiPresets.some(preset => preset?.name === name)) name = title + ' ' + suffix++;
+        index = apiPresets.push({ name, mealCode: code, url: '', key: '', model: grant.models[0], temp: '0.80' }) - 1;
+        saveApiPresets(index);
+      }
+      setDraftApiConfig(presetApiConfig(apiPresets[index]));
+      renderApiPresets(index);
+      mealSetNotice('已保存测试 API 预设。在上方点「应用当前配置」即可使用。');
+    }));
+    mealClaimReview.append(description, models, privacy, confirm);
+  });
+});
+
+mealDraftBlocks.querySelectorAll('[data-meal-toggle]').forEach(button => {
+  button.addEventListener('click', () => {
+    const panel = document.getElementById(button.getAttribute('aria-controls'));
+    const open = panel.hidden;
+    mealDraftBlocks.querySelectorAll('[data-meal-toggle]').forEach(tab => {
+      const target = document.getElementById(tab.getAttribute('aria-controls'));
+      target.hidden = !(target === panel && open);
+      tab.setAttribute('aria-expanded', String(!target.hidden));
+    });
+    mealSetNotice(open && !mealBase ? '醞酿中，兑换服务尚未配置。' : '');
+    if (open && panel.contains(mealIssueForm)) { mealRenderPresets(); mealRenderOwned(); }
+  });
+});
+document.getElementById('mealSwitchManual').addEventListener('click', () => {
+  setDraftApiConfig(apiConfig('', '', '', tempSlider.value));
+  renderApiPresets(-1);
+});
+[apiUrlInput, apiKey].forEach(input => { input.dataset.directPlaceholder = input.placeholder; });

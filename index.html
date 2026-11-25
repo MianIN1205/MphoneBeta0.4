@@ -4,6 +4,7 @@
   <meta charset="UTF-8">
   <!-- viewport-fit=cover：全屏时铺满刘海 / 底部横条区域；禁止缩放，避免 iPhone 点输入框时页面自动放大 -->
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <meta name="mphone-meal-service" content="">
   <title>眠花糖机 · Muse</title>
   <!-- 安装为桌面程序（PWA）：安卓 / 电脑读 manifest，苹果读 apple-* 标记 -->
   <link rel="manifest" href="manifest.webmanifest">
@@ -32,50 +33,50 @@
     #bootSplash .boot-sub { font-size: 12px; letter-spacing: 1px; color: #a594b0; }
   </style>
   <!-- 样式：按功能分在 core / desk / settings / chat / char / prompt 文件夹里；顺序不能乱（后面的覆盖前面的） -->
-  <link rel="stylesheet" href="css/core/base.css?v=164">
-  <link rel="stylesheet" href="css/core/app-screen.css?v=164">
-  <link rel="stylesheet" href="css/core/controls.css?v=164">
-  <link rel="stylesheet" href="css/core/avatar.css?v=164">
-  <link rel="stylesheet" href="css/core/image-picker.css?v=164">
-  <link rel="stylesheet" href="css/desk/statusbar.css?v=164">
-  <link rel="stylesheet" href="css/desk/desktop.css?v=164">
-  <link rel="stylesheet" href="css/desk/iconsets.css?v=164">
-  <link rel="stylesheet" href="css/desk/widgets.css?v=164">
-  <link rel="stylesheet" href="css/desk/appearance.css?v=164">
-  <link rel="stylesheet" href="css/desk/bookshelf.css?v=164">
-  <link rel="stylesheet" href="css/settings/settings.css?v=164">
-  <link rel="stylesheet" href="css/settings/mcp.css?v=164">
-  <link rel="stylesheet" href="css/desk/desk-apps.css?v=164">
-  <link rel="stylesheet" href="css/desk/memory-lib.css?v=164">
-  <link rel="stylesheet" href="css/core/dialogs.css?v=164">
-  <link rel="stylesheet" href="css/chat/tabs.css?v=164">
-  <link rel="stylesheet" href="css/chat/header.css?v=164">
-  <link rel="stylesheet" href="css/chat/contacts.css?v=164">
-  <link rel="stylesheet" href="css/chat/list.css?v=164">
-  <link rel="stylesheet" href="css/chat/new-chat.css?v=164">
-  <link rel="stylesheet" href="css/chat/feed.css?v=164">
-  <link rel="stylesheet" href="css/char/settings.css?v=164">
-  <link rel="stylesheet" href="css/chat/mine.css?v=164">
-  <link rel="stylesheet" href="css/chat/room.css?v=164">
-  <link rel="stylesheet" href="css/chat/messages.css?v=164">
-  <link rel="stylesheet" href="css/chat/msg-menu.css?v=164">
-  <link rel="stylesheet" href="css/chat/msg-ops.css?v=164">
-  <link rel="stylesheet" href="css/chat/calendar.css?v=164">
-  <link rel="stylesheet" href="css/chat/quick-bar.css?v=164">
-  <link rel="stylesheet" href="css/chat/status-panel.css?v=164">
-  <link rel="stylesheet" href="css/chat/stickers.css?v=164">
-  <link rel="stylesheet" href="css/char/look.css?v=164">
-  <link rel="stylesheet" href="css/char/assistant.css?v=164">
-  <link rel="stylesheet" href="css/prompt/prompt.css?v=164">
-  <link rel="stylesheet" href="css/desk/pet.css?v=164">
-  <link rel="stylesheet" href="css/chat/file-send.css?v=164">
-  <link rel="stylesheet" href="css/chat/peek.css?v=164">
-  <link rel="stylesheet" href="css/desk/places.css?v=164">
-  <link rel="stylesheet" href="css/desk/blindbox.css?v=164">
-  <link rel="stylesheet" href="css/chat/group.css?v=164">
-  <link rel="stylesheet" href="css/desk/books.css?v=164">
-  <link rel="stylesheet" href="css/desk/pair-notes.css?v=164">
-  <link rel="stylesheet" href="css/desk/tarot.css?v=164">
+  <link rel="stylesheet" href="css/core/base.css?v=165">
+  <link rel="stylesheet" href="css/core/app-screen.css?v=165">
+  <link rel="stylesheet" href="css/core/controls.css?v=165">
+  <link rel="stylesheet" href="css/core/avatar.css?v=165">
+  <link rel="stylesheet" href="css/core/image-picker.css?v=165">
+  <link rel="stylesheet" href="css/desk/statusbar.css?v=165">
+  <link rel="stylesheet" href="css/desk/desktop.css?v=165">
+  <link rel="stylesheet" href="css/desk/iconsets.css?v=165">
+  <link rel="stylesheet" href="css/desk/widgets.css?v=165">
+  <link rel="stylesheet" href="css/desk/appearance.css?v=165">
+  <link rel="stylesheet" href="css/desk/bookshelf.css?v=165">
+  <link rel="stylesheet" href="css/settings/settings.css?v=165">
+  <link rel="stylesheet" href="css/settings/mcp.css?v=165">
+  <link rel="stylesheet" href="css/desk/desk-apps.css?v=165">
+  <link rel="stylesheet" href="css/desk/memory-lib.css?v=165">
+  <link rel="stylesheet" href="css/core/dialogs.css?v=165">
+  <link rel="stylesheet" href="css/chat/tabs.css?v=165">
+  <link rel="stylesheet" href="css/chat/header.css?v=165">
+  <link rel="stylesheet" href="css/chat/contacts.css?v=165">
+  <link rel="stylesheet" href="css/chat/list.css?v=165">
+  <link rel="stylesheet" href="css/chat/new-chat.css?v=165">
+  <link rel="stylesheet" href="css/chat/feed.css?v=165">
+  <link rel="stylesheet" href="css/char/settings.css?v=165">
+  <link rel="stylesheet" href="css/chat/mine.css?v=165">
+  <link rel="stylesheet" href="css/chat/room.css?v=165">
+  <link rel="stylesheet" href="css/chat/messages.css?v=165">
+  <link rel="stylesheet" href="css/chat/msg-menu.css?v=165">
+  <link rel="stylesheet" href="css/chat/msg-ops.css?v=165">
+  <link rel="stylesheet" href="css/chat/calendar.css?v=165">
+  <link rel="stylesheet" href="css/chat/quick-bar.css?v=165">
+  <link rel="stylesheet" href="css/chat/status-panel.css?v=165">
+  <link rel="stylesheet" href="css/chat/stickers.css?v=165">
+  <link rel="stylesheet" href="css/char/look.css?v=165">
+  <link rel="stylesheet" href="css/char/assistant.css?v=165">
+  <link rel="stylesheet" href="css/prompt/prompt.css?v=165">
+  <link rel="stylesheet" href="css/desk/pet.css?v=165">
+  <link rel="stylesheet" href="css/chat/file-send.css?v=165">
+  <link rel="stylesheet" href="css/chat/peek.css?v=165">
+  <link rel="stylesheet" href="css/desk/places.css?v=165">
+  <link rel="stylesheet" href="css/desk/blindbox.css?v=165">
+  <link rel="stylesheet" href="css/chat/group.css?v=165">
+  <link rel="stylesheet" href="css/desk/books.css?v=165">
+  <link rel="stylesheet" href="css/desk/pair-notes.css?v=165">
+  <link rel="stylesheet" href="css/desk/tarot.css?v=165">
 </head>
 <body class="phone-fullscreen">
   <!-- 载入页：脚本全部加载完后淡出（见 js/core/boot.js） -->
@@ -364,6 +365,10 @@
           </div>
           <div class="api-config-actions">
             <div class="auto-hint api-connection-status" id="apiConnectionStatus" aria-live="polite"></div>
+          <div id="mealApiControls" class="meal-api-controls" hidden>
+            <span class="auto-hint" id="mealApiHint" role="status"></span>
+            <button type="button" class="action-btn btn-apply" id="mealSwitchManual">改用自填 API</button>
+          </div>
             <button type="button" class="action-btn btn-apply" id="btnApply">应用当前配置</button>
           </div>
         </div>
@@ -396,6 +401,46 @@
           </div>
           <div class="auto-hint" id="mediaTestResult">用上面的配置测试识图与语音。</div>
         </div>
+
+        <section class="settings-card meal-section" id="mealSection" aria-labelledby="mealHeading">
+          <div class="meal-heading">
+            <strong id="mealHeading">大锅饭</strong>
+            <button type="button" class="action-btn btn-apply" data-meal-toggle aria-controls="mealIssuePanel" aria-expanded="false">放饭</button>
+            <button type="button" class="action-btn btn-apply" data-meal-toggle aria-controls="mealClaimPanel" aria-expanded="false">吃饭</button>
+          </div>
+          <div id="mealIssuePanel" class="meal-panel" hidden>
+            <div class="field-label">生成兑换码</div>
+            <div class="auto-hint">分享时只需发送兑换码，领取者看不到你的 API Key。</div>
+            <form id="mealIssueForm" class="meal-form">
+              <label class="field-label" for="mealPresetPick">API 预设</label>
+              <select class="field-input" id="mealPresetPick" required></select>
+              <div class="auto-hint" id="mealSource" aria-live="polite"></div>
+              <div class="meal-heading">
+                <span class="field-label">可用模型，可多选</span>
+                <button type="button" class="action-btn btn-apply" id="mealLoadModels">获取模型</button>
+              </div>
+              <div class="meal-models" id="mealModels"></div>
+              <div class="meal-limits">
+                <label>最多领取人数<input class="field-input" name="portions" type="number" min="1" max="1000" value="5" required></label>
+                <label>每份可用次数<input class="field-input" name="perPerson" type="number" min="1" max="10000" value="10" required></label>
+                <label>总可用次数<input class="field-input" name="total" type="number" min="1" max="100000" value="50" required></label>
+                <label>有效天数<input class="field-input" name="days" type="number" min="1" max="30" value="7" required></label>
+              </div>
+              <div class="auto-hint">按转发到服务商的请求计次，自动重试也可能计次。</div>
+              <button type="submit" class="action-btn btn-apply">生成兑换码</button>
+            </form>
+            <div class="meal-form" id="mealIssued"></div>
+          </div>
+          <div id="mealClaimPanel" class="meal-panel" hidden>
+            <form id="mealClaimForm" class="meal-form">
+              <label class="field-label" for="mealCodeInput">使用兑换码</label>
+              <input class="field-input" id="mealCodeInput" placeholder="输入朋友发来的兑换码" maxlength="32" autocomplete="off" spellcheck="false" required>
+              <button type="submit" class="action-btn btn-apply">查看这份额度</button>
+            </form>
+            <div class="meal-form meal-panel" id="mealClaimReview" hidden></div>
+          </div>
+          <div class="auto-hint" id="mealNotice" role="status"></div>
+        </section>
 
         <div style="text-align: center; font-size: 11px; color: #bbb; letter-spacing: 0.4px; padding: 10px 0 4px;">
           🔹 Musephone · from MianIN
@@ -4445,7 +4490,7 @@
   </div>
 
   <!-- 程序入口：先准备存储，再按顺序加载 js/ 里的各功能脚本 -->
-  <script src="js/core/store.js?v=164" defer></script>
-  <script src="js/core/boot.js?v=164" defer></script>
+  <script src="js/core/store.js?v=165" defer></script>
+  <script src="js/core/boot.js?v=165" defer></script>
 </body>
 </html>

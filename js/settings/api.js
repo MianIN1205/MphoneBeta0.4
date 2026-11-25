@@ -51,6 +51,7 @@ eyeBtn.addEventListener('click', function() {
 
 const refreshBtn = document.getElementById('refreshBtn');
 var apiModelRequest = 0;
+var draftMealCode = '';
 
 function resetApiModelList() {
   apiModelRequest++;
@@ -130,17 +131,21 @@ function apiConfig(url, key, model, temp) {
 }
 function readDraftApiConfig() {
   var model = modelDisplay.textContent.trim();
-  return apiConfig(apiUrlInput.value.trim(), apiKey.value.trim(), model === '请选择模型' ? '' : model, tempSlider.value);
+  var cfg = apiConfig(apiUrlInput.value.trim(), apiKey.value.trim(), model === '请选择模型' ? '' : model, tempSlider.value);
+  return draftMealCode ? mealConfig(cfg, draftMealCode) : cfg;
 }
 function readAppliedApiConfig() {
-  return apiConfig(mphoneStore.load('mphone_api_url', ''), mphoneStore.load('mphone_api_key', ''),
+  var cfg = apiConfig(mphoneStore.load('mphone_api_url', ''), mphoneStore.load('mphone_api_key', ''),
     mphoneStore.load('mphone_model', ''), mphoneStore.load('mphone_temperature', '0.80'));
+  var code = mphoneStore.load('mphone_api_meal_code', '');
+  return code ? mealConfig(cfg, code) : cfg;
 }
 function sameApiConfig(a, b) {
-  return a.url === b.url && a.key === b.key && a.model === b.model && a.temp === b.temp;
+  return a.mealCode === b.mealCode && a.url === b.url && a.key === b.key && a.model === b.model && a.temp === b.temp;
 }
 function presetApiConfig(preset) {
-  return apiConfig(preset.url, preset.key, preset.model, preset.temp);
+  var cfg = apiConfig(preset.url, preset.key, preset.model, preset.temp);
+  return preset.mealCode ? mealConfig(cfg, preset.mealCode) : cfg;
 }
 
 function renderApiConnectionStatus() {
@@ -195,8 +200,10 @@ function saveApiPresets(index) {
 
 function setDraftApiConfig(cfg) {
   resetApiModelList();
-  apiUrlInput.value = cfg.url;
-  apiKey.value = cfg.key;
+  draftMealCode = cfg.mealCode || '';
+  apiUrlInput.value = draftMealCode ? '' : cfg.url;
+  apiKey.value = draftMealCode ? '' : cfg.key;
+  mealCheckConfig(draftMealCode);
   tempSlider.value = cfg.temp;
   setDraftApiModel(cfg.model);
   updateSliderThumb();
@@ -210,6 +217,14 @@ function restoreAppliedApiDraft() {
   }));
 }
 function applyApiConfig(cfg) {
+  var claim = cfg.mealCode && mealActiveCredential(cfg.mealCode);
+  if (cfg.mealCode && (!cfg.url || !claim || claim.state !== 'active' || claim.expires <= Date.now() || !claim.models.includes(cfg.model))) {
+    showToast('兑换码已失效或尚未选择模型', 'plain');
+    return;
+  }
+  cfg = mealPersistentConfig(cfg);
+  if (cfg.mealCode) mphoneStore.save('mphone_api_meal_code', cfg.mealCode);
+  else mphoneStore.remove('mphone_api_meal_code');
   mphoneStore.save('mphone_api_url', cfg.url);
   mphoneStore.save('mphone_api_key', cfg.key);
   mphoneStore.save('mphone_temperature', cfg.temp.toFixed(2));
@@ -276,7 +291,8 @@ apiPresetUpdate.addEventListener('click', function() {
   var index = selectedApiPreset, preset = apiPresets[index];
   if (!preset) return;
   var cfg = readDraftApiConfig();
-  Object.assign(preset, cfg, { temp: cfg.temp.toFixed(2) });
+  Object.assign(preset, mealPersistentConfig(cfg), { temp: cfg.temp.toFixed(2) });
+  if (!cfg.mealCode) delete preset.mealCode;
   saveApiPresets(index);
   setApiPresetDrawer('');
   apiPresetSaveMenu.focus();
@@ -312,7 +328,7 @@ apiPresetNameForm.addEventListener('submit', function(event) {
     if (linked.length) saveCharList();
   } else {
     var cfg = readDraftApiConfig();
-    apiPresets.push(Object.assign({ name: name }, cfg, { temp: cfg.temp.toFixed(2) }));
+    apiPresets.push(Object.assign({ name: name }, mealPersistentConfig(cfg), { temp: cfg.temp.toFixed(2) }));
     saveApiPresets(apiPresets.length - 1);
   }
   closeApiPresetName();

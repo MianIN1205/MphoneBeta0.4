@@ -751,3 +751,19 @@ textarea.field-input { resize: vertical; font-family: inherit; line-height: 1.5;
 #appAppearance .wp-btn-col { gap: 6px; }
 #appAppearance .wp-btn { min-height: 44px; padding: 5px 3px; gap: 3px; }
 #appAppearance .wp-btn svg { width: 14px; height: 14px; }
+
+.meal-heading { display: flex; align-items: center; gap: 7px; }
+.meal-heading > :first-child { margin-inline-end: auto; }
+.meal-heading .action-btn, .meal-owned .action-btn { flex: none; }
+.meal-panel { margin-top: 12px; }
+.meal-form { display: grid; gap: 7px; }
+.meal-form[hidden], .meal-panel[hidden], .meal-api-controls[hidden] { display: none; }
+.meal-form > .action-btn { justify-self: start; }
+.meal-limits { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+.meal-limits label, .meal-models label { min-width: 0; overflow-wrap: anywhere; }
+.meal-models { display: grid; gap: 5px; max-height: 10rem; overflow: auto; }
+.meal-owned { margin-top: 8px; overflow-wrap: anywhere; }
+.meal-owned code { display: block; }
+.meal-owned .action-btn { margin: 4px 5px 0 0; }
+.meal-api-controls { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.meal-section #mealNotice:not(:empty) { margin-top: 8px; }
