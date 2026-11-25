@@ -56,6 +56,150 @@ function notifyIcon(char) {
   return av && av.length < 300000 ? av : 'icons/icon.png';
 }
 // 通知显示名称：填了就用它当标题（比如「微信」），内容写成「角色：消息」
+// ---------- 消息提示音 ----------
+// 收到新消息横幅时播放一声轻柔的提示音；内置几首旋律，也可以上传 ≤1 秒的自定义音频
+var MSG_SOUND_PRESETS = [
+  { id: 'bubble',   name: '水泡',   notes: [[523, 0, 0.12], [659, 0.13, 0.12]] },                                        // C5→E5 轻快两音
+  { id: 'droplet',  name: '露珠',   notes: [[784, 0, 0.08], [1047, 0.1, 0.14]] },                                         // G5→C6 清脆滴落
+  { id: 'breeze',   name: '微风',   notes: [[440, 0, 0.15], [523, 0.12, 0.15], [659, 0.24, 0.18]] },                      // A4→C5→E5 三音和弦上行
+  { id: 'starfall', name: '星落',   notes: [[880, 0, 0.1], [784, 0.11, 0.1], [659, 0.22, 0.16]] },                        // A5→G5→E5 下行三音
+  { id: 'lullaby',  name: '摇篮',   notes: [[523, 0, 0.14], [587, 0.15, 0.1], [523, 0.26, 0.18]] }                        // C5→D5→C5 温柔回旋
+];
+var _soundCtx = null;
+function _getSoundCtx() {
+  if (!_soundCtx) _soundCtx = new (window.AudioContext || window.webkitAudioContext)();
+  if (_soundCtx.state === 'suspended') _soundCtx.resume();
+  return _soundCtx;
+}
+function _playNotes(notes, vol) {
+  try {
+    var ctx = _getSoundCtx(), now = ctx.currentTime;
+    notes.forEach(function(n) {
+      var osc = ctx.createOscillator(), gain = ctx.createGain();
+      osc.type = 'sine';
+      osc.frequency.value = n[0];
+      var t0 = now + n[1], dur = n[2];
+      gain.gain.setValueAtTime(vol, t0);
+      gain.gain.exponentialRampToValueAtTime(0.001, t0 + dur);
+      osc.connect(gain); gain.connect(ctx.destination);
+      osc.start(t0); osc.stop(t0 + dur);
+    });
+  } catch (_) {}
+}
+// 自定义铃声存在 assistCfg.soundCustom（base64 dataURL，≤1s 音频）
+function _playCustomSound() {
+  try {
+    var a = new Audio(assistCfg.soundCustom);
+    a.volume = 0.4;
+    a.play();
+  } catch (_) {}
+}
+function playMsgSound() {
+  if (!assistCfg.sound) return;
+  var id = assistCfg.soundId || 'bubble';
+  if (id === 'custom' && assistCfg.soundCustom) { _playCustomSound(); return; }
+  var preset = MSG_SOUND_PRESETS.find(function(p) { return p.id === id; }) || MSG_SOUND_PRESETS[0];
+  _playNotes(preset.notes, 0.13);
+}
+
+// 通话铃声：发起语音/视频通话时播放来电旋律（循环，直到接通或挂断）
+var CALL_RING_NOTES = [
+  [523, 0, 0.2], [659, 0.25, 0.2], [784, 0.5, 0.2], [659, 0.75, 0.2],
+  [523, 1.0, 0.2], [659, 1.25, 0.2], [784, 1.5, 0.3]
+];   // C5-E5-G5-E5-C5-E5-G5 轻柔来电旋律，约 1.8s 一轮
+var _callRingTimer = null, _callRingOn = false;
+function startCallRing() {
+  if (!assistCfg.callSound) return;
+  _callRingOn = true;
+  (function loop() {
+    if (!_callRingOn) return;
+    _playNotes(CALL_RING_NOTES, 0.10);
+    _callRingTimer = setTimeout(loop, 2200);
+  })();
+}
+function stopCallRing() {
+  _callRingOn = false;
+  clearTimeout(_callRingTimer);
+}
+
+// 铃声选择 UI
+var msgSoundOnInput = document.getElementById('msgSoundOn');
+var msgSoundOptions = document.getElementById('msgSoundOptions');
+var msgSoundCustomBtn = document.getElementById('msgSoundCustomBtn');
+var msgSoundCustomFile = document.getElementById('msgSoundCustomFile');
+var callSoundOnInput = document.getElementById('callSoundOn');
+msgSoundOnInput.checked = !!assistCfg.sound;
+callSoundOnInput.checked = !!assistCfg.callSound;
+
+function paintSoundOptions() {
+  msgSoundOptions.innerHTML = '';
+  var current = assistCfg.soundId || 'bubble';
+  MSG_SOUND_PRESETS.forEach(function(p) {
+    var btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'msg-sound-opt' + (current === p.id ? ' active' : '');
+    btn.textContent = p.name;
+    btn.onclick = function() {
+      assistCfg.soundId = p.id;
+      saveAssistCfg();
+      paintSoundOptions();
+      _playNotes(p.notes, 0.13);
+    };
+    msgSoundOptions.appendChild(btn);
+  });
+  // 自定义那个
+  var cBtn = document.createElement('button');
+  cBtn.type = 'button';
+  cBtn.className = 'msg-sound-opt' + (current === 'custom' ? ' active' : '');
+  cBtn.textContent = assistCfg.soundCustom ? '我的铃声 ✓' : '我的铃声';
+  cBtn.onclick = function() {
+    if (assistCfg.soundCustom) {
+      assistCfg.soundId = 'custom';
+      saveAssistCfg();
+      paintSoundOptions();
+      _playCustomSound();
+    } else {
+      msgSoundCustomFile.click();
+    }
+  };
+  msgSoundOptions.appendChild(cBtn);
+}
+paintSoundOptions();
+
+msgSoundOnInput.addEventListener('change', function() {
+  assistCfg.sound = this.checked;
+  saveAssistCfg();
+  if (this.checked) playMsgSound();
+});
+callSoundOnInput.addEventListener('change', function() {
+  assistCfg.callSound = this.checked;
+  saveAssistCfg();
+  if (this.checked) { startCallRing(); setTimeout(stopCallRing, 2000); }   // 试听一小段
+});
+msgSoundCustomBtn.onclick = function() { msgSoundCustomFile.click(); };
+msgSoundCustomFile.addEventListener('change', function() {
+  var file = this.files[0];
+  this.value = '';
+  if (!file) return;
+  if (file.size > 200000) { showToast('文件太大了，请选 1 秒以内的短音频', 'error'); return; }
+  var reader = new FileReader();
+  reader.onload = function() {
+    // 检查时长
+    var a = new Audio(reader.result);
+    a.addEventListener('loadedmetadata', function() {
+      if (a.duration > 1.5) { showToast('这段音频超过 1 秒了，请裁短一些', 'error'); return; }
+      assistCfg.soundCustom = reader.result;
+      assistCfg.soundId = 'custom';
+      saveAssistCfg();
+      paintSoundOptions();
+      _playCustomSound();
+      showToast('✓ 已设为自定义铃声', 'success');
+    });
+    a.addEventListener('error', function() { showToast('这个文件播放不了', 'error'); });
+  };
+  reader.readAsDataURL(file);
+});
+
 // 回复一条条蹦出来（假流式，用户要的开关，默认关）：js/chat/reply.js 的 previewStream / crRevealOneByOne 看这个
 (function() {
   var t = document.getElementById('fakeStreamOn');
@@ -71,6 +215,7 @@ function notifyTitleBody(name, body) {
 // 角色发来的新消息（只在应用处于后台时通知）
 function notifyNewMessages(char, added) {
   if (!notifyReady() || document.visibilityState === 'visible' || !char || !added || !added.length) return;
+  playMsgSound();
   var last = added[added.length - 1];
   var body = msgPreviewText(last) + (added.length > 1 ? '（共 ' + added.length + ' 条）' : '');
   var tb = notifyTitleBody(char.charAlias || char.charName || '新消息', body);
@@ -85,6 +230,7 @@ function notifyFeedActivity(char, post, text, comment) {
     showInAppNotice(char, [{ role: 'assistant', content: text, time: Date.now() }], target);
     return;
   }
+  playMsgSound();
   if (!notifyReady()) return;
   var tb = notifyTitleBody(char.charAlias || char.charName || '角色', text);
   var tag = 'feed-' + post.id + '-' + (target.commentId || char.id);
@@ -106,6 +252,7 @@ function showInAppNotice(char, added, target) {
   if (!char || !added || !added.length || document.visibilityState !== 'visible') return;
   var round = added[0].time || 0;
   if (round && inappDismissed[char.id] === round) return;
+  playMsgSound();
   inappNotice._round = round;
   inappNotice._target = target || { open: 'chat', charId: char.id };
   inappNotice.querySelector('.inapp-kind').hidden = inappNotice._target.open !== 'feed';

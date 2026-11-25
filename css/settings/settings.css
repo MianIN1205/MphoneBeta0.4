@@ -842,3 +842,39 @@ textarea.field-input { resize: vertical; font-family: inherit; line-height: 1.5;
 .meal-claim-review .meal-claim-note { margin: 0; line-height: 1.5; }
 .meal-claim-review > .action-btn { justify-self: stretch; min-height: 44px; }
 #mealClaimNotice:empty { display: none; }
+
+/* 消息提示音：铃声选择按钮组 */
+.msg-sound-options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 6px 0 8px;
+}
+.msg-sound-opt {
+  flex: 0 0 auto;
+  padding: 5px 12px;
+  border: none;
+  border-radius: 10px;
+  background: rgba(0,0,0,0.045);
+  font-size: 12px;
+  color: #555;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+.msg-sound-opt.active {
+  background: rgba(208,88,120,0.10);
+  color: #C05070;
+  box-shadow: 0 0 0 1.5px rgba(208,88,120,0.30);
+}
+.msg-sound-custom-btn {
+  display: block;
+  width: 100%;
+  padding: 7px 0;
+  border: 1px dashed rgba(208,88,120,0.3);
+  border-radius: 10px;
+  background: transparent;
+  font-size: 12px;
+  color: #9a7a88;
+  cursor: pointer;
+  margin-bottom: 2px;
+}

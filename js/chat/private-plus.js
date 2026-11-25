@@ -244,6 +244,7 @@ function openPrivateCallScreen(ctx, mode) {
   d.querySelector('.private-call-header span').textContent = mode === 'video' ? '视频通话' : '语音通话';
   d.querySelector('.private-call-name').textContent = name;
   paintCharAvatar(d.querySelector('.private-call-avatar'), ctx.char);
+  if (typeof startCallRing === 'function') startCallRing();   // 来电铃声
   function restore() { d.hidden = false; mini.hidden = true; d.querySelector('[data-minimize]').focus(); }
   activePrivateCall = { restore: restore };
   mini.onclick = restore;
@@ -259,6 +260,7 @@ function openPrivateCallScreen(ctx, mode) {
   var request = new AbortController(), conversation = [];
   function stop(stream) { if (stream) stream.getTracks().forEach(function(track) { track.stop(); }); }
   function close() {
+    if (typeof stopCallRing === 'function') stopCallRing();
     closed = true; request.abort(); clearTimeout(recordTimer); stop(camera); stop(mic); audio.pause();
     if (voiceUrl) URL.revokeObjectURL(voiceUrl);
     clearInterval(clock); activePrivateCall = null; d.remove(); mini.remove();
@@ -319,6 +321,7 @@ function openPrivateCallScreen(ctx, mode) {
     var text = input.value.trim(), voice = recording, cfg = getApiCfg(ctx.char);
     if (busy || (!text && !voice && !camera) || (recorder && recorder.state === 'recording')) return;
     if (!cfg.url || !cfg.key || !cfg.model) { hint.textContent = '请先配置角色使用的模型。'; return; }
+    if (typeof stopCallRing === 'function') stopCallRing();   // 接通，停铃声
     send.disabled = true; busy = true;
     try {
       if (voice && !text && mediaCfg.voiceMode !== 'audio') {
