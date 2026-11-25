@@ -1,4 +1,4 @@
-// 大锅饭凭证单独保存在浏览器，预设与整机备份只记录兑换编号。
+﻿// 大锅饭凭证单独保存在浏览器，预设与整机备份只记录兑换编号。
 const mealBase = (document.querySelector('meta[name="mphone-meal-service"]').content || '').trim().replace(/\/+$/, '');
 const mealCodePattern = /^[a-f0-9]{32}$/;
 const mealTokenPattern = /^[a-f0-9]{64}$/;
@@ -20,29 +20,63 @@ const mealCodeInput = document.getElementById('mealCodeInput');
 const mealPrivacy = document.getElementById('mealPrivacy');
 const mealShareNote = '使用这张码时，随请求发送的聊天内容和附件会经过大锅饭后台及服务商，建议用新聊天试用。';
 const mealDirectShareNote = '直连码，聊天内容直接发给中转站，不经大锅饭后台。直连码内含可还原的 API Key，请仅私发给信任的人。';
-const mealDirectPrefix = 'MPDC1-';
+const mealDirectPrefixOld = 'MPDC1-';
+const mealDirectPrefixNew = 'zl-';
 
-// 直连码编解码：MPDC1-{base64(json)} — 不是加密，只是不明文暴露
-function mealDirectEncode(payload) {
-  return mealDirectPrefix + btoa(unescape(encodeURIComponent(JSON.stringify(payload))));
+// 直连码编解码
+// 新格式 zl-{base64url(deflate(json))}：字段缩写 + deflate 压缩，比旧格式短约 40-50%
+// 旧格式 MPDC1-{base64(json)} 继续兼容识别
+// 字段映射：i=id, u=url, k=key, m=models, n=name, p=perPerson
+async function mealDirectEncode(payload) {
+  var compact = { i: payload.id, u: payload.url, k: payload.key, m: payload.models, n: payload.name || '', p: payload.perPerson };
+  var json = JSON.stringify(compact);
+  var blob = new Blob([json]);
+  var cs = new CompressionStream('deflate-raw');
+  var compressed = new Response(blob.stream().pipeThrough(cs)).arrayBuffer();
+  var bytes = new Uint8Array(await compressed);
+  // base64url：不用 + / =，粘贴分享时不会被截断
+  var str = '';
+  for (var idx = 0; idx < bytes.length; idx++) str += String.fromCharCode(bytes[idx]);
+  var b64 = btoa(str).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+  return mealDirectPrefixNew + b64;
 }
-function mealDirectDecode(code) {
+async function mealDirectDecode(code) {
   try {
-    if (!code.startsWith(mealDirectPrefix)) return null;
-    return JSON.parse(decodeURIComponent(escape(atob(code.slice(mealDirectPrefix.length)))));
+    if (code.startsWith(mealDirectPrefixNew)) return await mealDirectDecodeNew(code);
+    if (code.startsWith(mealDirectPrefixOld)) return mealDirectDecodeOld(code);
+    return null;
   } catch (_) { return null; }
 }
+function mealDirectDecodeOld(code) {
+  var raw = JSON.parse(decodeURIComponent(escape(atob(code.slice(mealDirectPrefixOld.length)))));
+  return raw;
+}
+async function mealDirectDecodeNew(code) {
+  var b64 = code.slice(mealDirectPrefixNew.length).replace(/-/g, '+').replace(/_/g, '/');
+  while (b64.length % 4) b64 += '=';
+  var binary = atob(b64);
+  var bytes = new Uint8Array(binary.length);
+  for (var idx = 0; idx < binary.length; idx++) bytes[idx] = binary.charCodeAt(idx);
+  var ds = new DecompressionStream('deflate-raw');
+  var writer = ds.writable.getWriter();
+  writer.write(bytes);
+  writer.close();
+  var decompressed = await new Response(ds.readable).text();
+  var c = JSON.parse(decompressed);
+  // 还原缩写字段为长字段名，后续代码不用改
+  return { id: c.i, url: c.u, key: c.k, models: c.m, name: c.n || '', perPerson: c.p };
+}
 function mealIsDirectCode(text) {
-  return text.startsWith(mealDirectPrefix) && mealDirectDecode(text) !== null;
+  return text.startsWith(mealDirectPrefixNew) || text.startsWith(mealDirectPrefixOld);
 }
 
 function mealReadCode() {
   const raw = mealCodeInput.value.trim();
-  // 直连码：从分享文字中提取
-  const directShared = raw.match(/^🍙 眠花糖机大锅饭直连码[：:]\s*(MPDC1-[A-Za-z0-9+/=]+)(?=\s|🍽️大锅饭|直连码|$)/u);
+  // 直连码：从分享文字中提取（新 zl- 和旧 MPDC1- 两种格式）
+  const directShared = raw.match(/^🍙 眠花糖机大锅饭直连码[：:]\s*((?:zl-|MPDC1-)[A-Za-z0-9+/=_-]+)(?=\s|🍽️大锅饭|直连码|$)/u);
   if (directShared) return directShared[1];
   // 直连码：裸码
-  if (raw.startsWith(mealDirectPrefix)) return raw;
+  if (raw.startsWith(mealDirectPrefixNew) || raw.startsWith(mealDirectPrefixOld)) return raw;
   // 后台码：从分享文字中提取
   const text = raw.toLowerCase();
   const shared = text.match(/^🍲 眠花糖机大锅饭兑换码[：:]\s*([a-f0-9]{32})(?=\s|🍽️大锅饭|使用这张码时|$)/u);
@@ -650,7 +684,7 @@ mealDirectForm.addEventListener('submit', event => {
     if (!address || !key || !models.length) throw new Error('请填写地址和 Key，获取模型后至少选一个。');
     if (models.length > 200) throw new Error('一张直连码最多支持 200 个模型，请减少所选模型。');
     const payload = { id: crypto.randomUUID(), name, url: address, key, models, perPerson };
-    const encoded = mealDirectEncode(payload);
+    const encoded = await mealDirectEncode(payload);
     const owned = mealRemember('mphoneMealDirectOwned') || [];
     const displayName = name || address.replace(/^https?:\/\//, '').split('/')[0];
     owned.unshift({ code: encoded, name: displayName, models, perPerson, createdAt: Date.now() });
@@ -704,7 +738,7 @@ function mealDirectRenderOwned() {
 }
 // 直连码领取 — 在吃饭面板里识别并显示信息
 async function mealInspectDirectCode(code, request) {
-  const payload = mealDirectDecode(code);
+  const payload = await mealDirectDecode(code);
   let address;
   try { address = new URL(payload?.url); } catch (_) {}
   if (address?.protocol !== 'https:' || address.username || address.password || address.search || address.hash ||
@@ -717,7 +751,7 @@ async function mealInspectDirectCode(code, request) {
   }
   let directId;
   try {
-    const bytes = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(mealDirectEncode(payload)));
+    const bytes = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(await mealDirectEncode(payload)));
     directId = Array.from(new Uint8Array(bytes), n => n.toString(16).padStart(2, '0')).join('');
   } catch (_) {
     if (request === mealInspectRequest) mealClaimNotice.textContent = '此浏览器暂时无法读取直连码。';
