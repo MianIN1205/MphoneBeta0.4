@@ -62,7 +62,7 @@ async function readJson(request, limit) {
 }
 function view(pot) {
   return {
-    provider: pot.source, models: pot.models, expires: pot.expires, portions: pot.portions,
+    provider: pot.source, name: pot.name || pot.source, models: pot.models, expires: pot.expires, portions: pot.portions,
     perPerson: pot.perPerson, claimed: pot.claimed, total: pot.total, remaining: pot.remaining,
     sharedBalance: pot.sharedBalance === true,
     state: pot.closed ? 'closed' : pot.expires <= Date.now() ? 'expired' : pot.remaining <= 0 ? 'spent' : 'active'
@@ -167,7 +167,9 @@ async function route(request, env) {
   if (path === '/create') {
     const provider = providerFor(env, String(body.provider || ''));
     const models = Array.isArray(body.models) ? [...new Set(body.models)] : [];
+    const name = body.name === undefined ? '' : body.name;
     if (!provider || typeof body.address !== 'string' || body.address.replace(/\/+$/, '') !== provider.url ||
+        typeof name !== 'string' || name.length > 40 || /[\r\n]/.test(name) ||
         typeof body.key !== 'string' || !body.key.trim() || body.key.length > 1024 ||
         !models.length || models.length > 200 || models.some(model => typeof model !== 'string' || !model.trim() || model.length > 200) ||
         !validCount(body.portions, 1000) || !validCount(body.perPerson, 10000) ||
@@ -179,7 +181,8 @@ async function route(request, env) {
     const code = randomHex(16);
     const owner = randomHex(32);
     const pot = {
-      provider: body.provider, source: provider.name, models, key: await protect(env.MEAL_SECRET, body.key),
+      provider: body.provider, source: provider.name, name: name.trim() || provider.name,
+      models, key: await protect(env.MEAL_SECRET, body.key),
       owner: await hash(owner), expires: Date.now() + body.days * DAY, portions: body.portions,
       perPerson: body.perPerson, claimed: 0, total: body.total, remaining: body.total, closed: false, sharedBalance: true
     };

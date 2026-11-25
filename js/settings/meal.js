@@ -19,15 +19,43 @@ const mealNotice = document.getElementById('mealNotice');
 const mealCodeInput = document.getElementById('mealCodeInput');
 const mealPrivacy = document.getElementById('mealPrivacy');
 const mealShareNote = '使用这张码时，随请求发送的聊天内容和附件会经过大锅饭后台及服务商，建议用新聊天试用。';
+const mealDirectShareNote = '直连码，聊天内容直接发给中转站，不经大锅饭后台。直连码内含可还原的 API Key，请仅私发给信任的人。';
+const mealDirectPrefix = 'MPDC1-';
+
+// 直连码编解码：MPDC1-{base64(json)} — 不是加密，只是不明文暴露
+function mealDirectEncode(payload) {
+  return mealDirectPrefix + btoa(unescape(encodeURIComponent(JSON.stringify(payload))));
+}
+function mealDirectDecode(code) {
+  try {
+    if (!code.startsWith(mealDirectPrefix)) return null;
+    return JSON.parse(decodeURIComponent(escape(atob(code.slice(mealDirectPrefix.length)))));
+  } catch (_) { return null; }
+}
+function mealIsDirectCode(text) {
+  return text.startsWith(mealDirectPrefix) && mealDirectDecode(text) !== null;
+}
 
 function mealReadCode() {
-  const text = mealCodeInput.value.trim().toLowerCase();
-  const shared = text.match(/^🍲 眠花糖机大锅饭兑换码[：:]\s*([a-f0-9]{32})(?=\s|使用这张码时|$)/u);
+  const raw = mealCodeInput.value.trim();
+  // 直连码：从分享文字中提取
+  const directShared = raw.match(/^🍙 眠花糖机大锅饭直连码[：:]\s*(MPDC1-[A-Za-z0-9+/=]+)(?=\s|🍽️大锅饭|直连码|$)/u);
+  if (directShared) return directShared[1];
+  // 直连码：裸码
+  if (raw.startsWith(mealDirectPrefix)) return raw;
+  // 后台码：从分享文字中提取
+  const text = raw.toLowerCase();
+  const shared = text.match(/^🍲 眠花糖机大锅饭兑换码[：:]\s*([a-f0-9]{32})(?=\s|🍽️大锅饭|使用这张码时|$)/u);
   return shared ? shared[1] : text;
 }
 const mealClaimReview = document.getElementById('mealClaimReview');
 const mealIssued = document.getElementById('mealIssued');
 const mealHelpers = document.getElementById('mealApiHint');
+const mealApiBalance = document.getElementById('mealApiBalance');
+
+function mealPresetTitle(summary) {
+  return '🍽️大锅饭 · ' + (summary.name || summary.provider);
+}
 let mealInspectedCode = '';
 let mealInspectRequest = 0;
 let mealInspectTimer;
@@ -78,8 +106,10 @@ function mealBalanceText(summary) {
 const mealStateLabel = { expired: '已到期', spent: '次数已用完', closed: '发码者已关闭', missing: '此浏览器没有领取凭证' };
 
 function mealShowConfig(code, state, summary) {
-  const locked = !!code;
-  const label = !locked ? '' : state === 'active' ? '正在使用兑换码' : '兑换码已失效';
+  // 检查当前 draft 是否来自直连预设
+  const directPreset = !code && apiPresets.find(p => p?.mealDirect && (draftMealDirectId ? p.mealDirectId === draftMealDirectId : !p.mealDirectId && p.url === apiUrlInput.value.trim() && p.key === apiKey.value.trim()));
+  const locked = !!code || !!directPreset;
+  const label = !code ? (directPreset ? '正在使用直连预设' : '') : state === 'active' ? '正在使用兑换码' : '兑换码已失效';
   [apiUrlInput, apiKey].forEach(input => {
     input.disabled = locked;
     if (locked) input.placeholder = label;
@@ -87,9 +117,14 @@ function mealShowConfig(code, state, summary) {
   });
   eyeBtn.disabled = locked;
   document.getElementById('mealApiControls').hidden = !locked;
-  if (locked) mealHelpers.textContent = summary && state === 'active'
-    ? '食材来源（服务商） · ' + summary.provider + '　剩余 ' + Math.min(summary.personalRemaining, summary.remaining) + ' 次' + (summary.sharedBalance ? ' · ' + mealBalanceText(summary) : '')
+  if (directPreset) {
+    const usage = typeof mealDirectGetUsage === 'function' ? mealDirectGetUsage(directPreset) : null;
+    mealHelpers.textContent = '直连模式 · 聊天内容直接发给中转站' + (usage && usage.limit ? ' · 已用 ' + usage.used + '/' + usage.limit + ' 次' : '');
+    mealApiBalance.textContent = '';
+  } else if (locked) mealHelpers.textContent = summary && state === 'active'
+    ? '食材来源（服务商） · ' + summary.provider + '　剩余 ' + Math.min(summary.personalRemaining, summary.remaining) + ' 次'
     : mealStateLabel[state] || '';
+  mealApiBalance.textContent = locked && state === 'active' ? mealBalanceText(summary) : '';
 }
 function mealCheckConfig(code) {
   const saved = mealActiveCredential(code);
@@ -225,7 +260,7 @@ mealIssueForm.addEventListener('submit', event => {
     if (models.length > 200) throw new Error('一张兑换码最多支持 200 个模型，请减少所选模型。');
     const source = await mealRequest('/source', { address });
     const made = await mealRequest('/create', {
-      provider: source.id, address, key, models,
+      provider: source.id, address, key, models, name: String(fields.get('name') || '').trim(),
       portions: Number(fields.get('portions')), perPerson: Number(fields.get('perPerson')),
       total: Number(fields.get('total')), days: Number(fields.get('days'))
     });
@@ -251,7 +286,7 @@ function mealRenderOwned() {
     const row = document.createElement('div');
     row.className = 'meal-owned';
     const title = document.createElement('div');
-    title.textContent = pot.provider;
+    title.textContent = mealPresetTitle(pot);
     const code = document.createElement('code');
     code.textContent = pot.code;
     const status = document.createElement('div');
@@ -264,7 +299,7 @@ function mealRenderOwned() {
     check.textContent = '查用量';
     close.textContent = '关闭兑换';
     copy.addEventListener('click', () => mealBusy(copy, async () => {
-      await navigator.clipboard.writeText('🍲 眠花糖机大锅饭兑换码：' + pot.code + '\n' + mealShareNote);
+      await navigator.clipboard.writeText('🍲 眠花糖机大锅饭兑换码：' + pot.code + '\n' + mealPresetTitle(pot) + '\n' + mealShareNote);
       mealSetNotice('已复制兑换码和使用说明。');
     }));
     function render(summary) {
@@ -304,7 +339,8 @@ function mealResetInspection() {
 }
 mealCodeInput.addEventListener('input', () => {
   mealResetInspection();
-  if (mealCodePattern.test(mealReadCode())) mealInspectTimer = setTimeout(mealInspect, 300);
+  const code = mealReadCode();
+  if (mealCodePattern.test(code) || mealIsDirectCode(code)) mealInspectTimer = setTimeout(mealInspect, 300);
 });
 mealClaimForm.addEventListener('submit', event => {
   event.preventDefault();
@@ -313,6 +349,11 @@ mealClaimForm.addEventListener('submit', event => {
 async function mealInspect() {
   mealResetInspection();
   const code = mealReadCode();
+  // 直连码走单独的领取流程
+  if (mealIsDirectCode(code)) {
+    await mealInspectDirectCode(code, mealInspectRequest);
+    return;
+  }
   if (!mealCodePattern.test(code)) {
     mealClaimNotice.textContent = '请粘贴完整的兑换码或分享文字。';
     return;
@@ -329,6 +370,8 @@ async function mealInspect() {
     const existing = mealActiveCredential(code);
     mealClaimReview.replaceChildren();
     mealClaimReview.hidden = false;
+    const title = document.createElement('strong');
+    title.textContent = mealPresetTitle(summary);
     const facts = document.createElement('dl');
     facts.className = 'meal-claim-facts';
     const expiry = new Intl.DateTimeFormat('zh-CN', {
@@ -361,7 +404,7 @@ async function mealInspect() {
     const confirm = document.createElement('button');
     confirm.type = 'button';
     confirm.className = 'action-btn btn-apply';
-    confirm.textContent = existing ? '打开已领取预设' : '领取并保存为测试 API 预设';
+    confirm.textContent = existing ? '打开已领取预设' : '领取并保存预设';
     confirm.disabled = summary.state !== 'active' || (!existing && summary.claimed >= summary.portions);
     if (confirm.disabled) mealClaimNotice.textContent = mealStateLabel[summary.state] || '领取名额已满。';
     mealInspectedCode = code;
@@ -374,22 +417,22 @@ async function mealInspect() {
         mealRemember('mphoneMealClaim:' + code, Object.assign(grant, { token }));
         let index = apiPresets.findIndex(preset => preset?.mealCode === code);
         if (index < 0) {
-          const title = '测试 API · ' + grant.provider;
-          let name = title;
+          const baseName = mealPresetTitle(grant);
+          let name = baseName;
           let suffix = 2;
-          while (apiPresets.some(preset => preset?.name === name)) name = title + ' ' + suffix++;
+          while (apiPresets.some(preset => preset?.name === name)) name = baseName + ' ' + suffix++;
           index = apiPresets.push({ name, mealCode: code, url: '', key: '', model: grant.models[0], temp: '0.80' }) - 1;
           saveApiPresets(index);
         }
         setDraftApiConfig(presetApiConfig(apiPresets[index]));
         renderApiPresets(index);
-        mealClaimNotice.textContent = '已保存测试 API 预设。在上方点「应用当前配置」即可使用。';
+        mealClaimNotice.textContent = '已保存大锅饭预设。在上方点「应用当前配置」即可使用。';
         confirm.textContent = '打开已领取预设';
       } catch (error) {
         if (mealInspectedCode === code) mealClaimNotice.textContent = error.message || '领取失败，请重试。';
       }
     }));
-    mealClaimReview.append(facts, models, privacy, confirm);
+    mealClaimReview.append(title, facts, models, privacy, confirm);
   } catch (error) {
     if (request === mealInspectRequest) mealClaimNotice.textContent = error.status ? error.message : '暂时查不到兑换码，请点「查询兑换码」重试。';
   } finally {
@@ -428,12 +471,271 @@ mealDraftBlocks.querySelectorAll('[data-meal-toggle]').forEach(button => {
     });
     mealPrivacy.hidden = !open;
     if (!open) mealPrivacy.open = false;
-    mealSetNotice(open && !mealBase ? '醞酿中，兑换服务尚未配置。' : '');
+    mealSetNotice(open && !mealBase && panel === mealIssuePanel ? '醞酿中，兑换服务尚未配置。' : '');
     if (open && panel.contains(mealIssueForm)) mealRenderOwned();
+    if (open && panel.id === 'mealDirectPanel') mealDirectRenderOwned();
   });
 });
-document.getElementById('mealSwitchManual').addEventListener('click', () => {
-  setDraftApiConfig(apiConfig('', '', '', tempSlider.value));
-  renderApiPresets(-1);
-});
 [apiUrlInput, apiKey].forEach(input => { input.dataset.directPlaceholder = input.placeholder; });
+
+// =============================================
+// 直连放饭：生成、领取、本地计次
+// =============================================
+
+const mealDirectForm = document.getElementById('mealDirectForm');
+const mealDirectPanel = document.getElementById('mealDirectPanel');
+const mealDirectAddress = document.getElementById('mealDirectAddress');
+const mealDirectKey = document.getElementById('mealDirectKey');
+const mealDirectModels = document.getElementById('mealDirectModels');
+const mealDirectModelToggle = document.getElementById('mealDirectModelToggle');
+const mealDirectModelDrawer = document.getElementById('mealDirectModelDrawer');
+const mealDirectModelSummary = document.getElementById('mealDirectModelSummary');
+const mealDirectSelectAll = document.getElementById('mealDirectSelectAll');
+const mealDirectSource = document.getElementById('mealDirectSource');
+const mealDirectIssued = document.getElementById('mealDirectIssued');
+let mealDirectIssuerRequest = 0;
+
+// 直连放饭 — 模型选择器
+function mealDirectOpenModels(open) {
+  mealDirectModelDrawer.hidden = !open;
+  mealDirectModelToggle.setAttribute('aria-expanded', String(open));
+}
+mealDirectModelToggle.addEventListener('click', () => mealDirectOpenModels(mealDirectModelDrawer.hidden));
+mealDirectModelDrawer.addEventListener('keydown', event => {
+  if (event.key !== 'Escape') return;
+  mealDirectOpenModels(false);
+  mealDirectModelToggle.focus();
+});
+function mealDirectUpdateModelSelection() {
+  const choices = [...mealDirectModels.querySelectorAll('input[type=checkbox]')];
+  const selected = choices.filter(input => input.checked).length;
+  mealDirectModelToggle.disabled = !choices.length;
+  mealDirectModelSummary.textContent = choices.length ? '已选 ' + selected + ' / ' + choices.length + ' 个模型' : '选择模型';
+  mealDirectSelectAll.hidden = !choices.length;
+  mealDirectSelectAll.textContent = choices.every(input => input.checked) ? '取消全选' : '全选';
+}
+mealDirectModels.addEventListener('change', mealDirectUpdateModelSelection);
+mealDirectSelectAll.addEventListener('click', () => {
+  const choices = [...mealDirectModels.querySelectorAll('input[type=checkbox]')];
+  const select = choices.some(input => !input.checked);
+  choices.forEach(input => { input.checked = select; });
+  mealDirectUpdateModelSelection();
+});
+function mealDirectFillModels(ids, selected) {
+  mealDirectModels.replaceChildren();
+  [...new Set(ids.filter(Boolean))].forEach(id => {
+    const field = document.createElement('label');
+    const checkbox = document.createElement('input');
+    checkbox.type = 'checkbox';
+    checkbox.value = id;
+    checkbox.checked = id === selected;
+    field.append(checkbox, document.createTextNode(' ' + id));
+    mealDirectModels.append(field);
+  });
+  mealDirectUpdateModelSelection();
+  mealDirectOpenModels(mealDirectModels.childElementCount > 0);
+}
+
+[mealDirectAddress, mealDirectKey].forEach(input => {
+  input.addEventListener('input', () => {
+    mealDirectIssuerRequest++;
+    mealDirectSource.textContent = '';
+    mealDirectFillModels([]);
+  });
+});
+
+// 直连放饭 — 生成直连码
+mealDirectForm.addEventListener('submit', event => {
+  event.preventDefault();
+  const fields = new FormData(mealDirectForm);
+  const models = [...mealDirectModels.querySelectorAll('input:checked')].map(input => input.value);
+  const address = mealDirectAddress.value.trim().replace(/\/+$/, '');
+  const key = mealDirectKey.value.trim();
+  const name = document.getElementById('mealDirectName').value.trim();
+  const perPerson = Number(fields.get('perPerson'));
+  mealBusy(event.submitter, async () => {
+    if (!address || !key || !models.length) throw new Error('请填写地址和 Key，获取模型后至少选一个。');
+    if (models.length > 200) throw new Error('一张直连码最多支持 200 个模型，请减少所选模型。');
+    const payload = { id: crypto.randomUUID(), name, url: address, key, models, perPerson };
+    const encoded = mealDirectEncode(payload);
+    const owned = mealRemember('mphoneMealDirectOwned') || [];
+    const displayName = name || address.replace(/^https?:\/\//, '').split('/')[0];
+    owned.unshift({ code: encoded, name: displayName, models, perPerson, createdAt: Date.now() });
+    mealRemember('mphoneMealDirectOwned', owned);
+    if (!mealDirectPanel.hidden) {
+      mealDirectRenderOwned();
+      mealSetNotice('直连码已生成，复制后私下分享。');
+    }
+  });
+});
+
+// 直连放饭 — 渲染已发列表
+function mealDirectRenderOwned() {
+  mealDirectIssued.replaceChildren();
+  const owned = mealRemember('mphoneMealDirectOwned') || [];
+  if (!owned.length) {
+    const empty = document.createElement('div');
+    empty.className = 'auto-hint';
+    empty.textContent = '生成后的直连码会显示在这里。';
+    mealDirectIssued.append(empty);
+    return;
+  }
+  owned.forEach((pot, idx) => {
+    const row = document.createElement('div');
+    row.className = 'meal-owned';
+    const title = document.createElement('div');
+    title.textContent = '🍙 ' + (pot.name || '直连码');
+    const info = document.createElement('div');
+    info.className = 'auto-hint';
+    info.textContent = pot.models.length + ' 个模型 · 每人 ' + pot.perPerson + ' 次';
+    const copy = document.createElement('button');
+    const del = document.createElement('button');
+    [copy, del].forEach(button => { button.type = 'button'; button.className = 'action-btn btn-apply'; });
+    copy.textContent = '复制码';
+    del.textContent = '删除';
+    copy.addEventListener('click', () => mealBusy(copy, async () => {
+      const shareText = '🍙 眠花糖机大锅饭直连码：' + pot.code + '\n🍽️大锅饭 · ' + (pot.name || '直连') + '\n' + mealDirectShareNote;
+      await navigator.clipboard.writeText(shareText);
+      mealSetNotice('已复制直连码。');
+    }));
+    del.addEventListener('click', () => openConfirm('删除这条直连码记录？已分享出去的码仍然可用。', () => {
+      const list = mealRemember('mphoneMealDirectOwned') || [];
+      list.splice(idx, 1);
+      mealRemember('mphoneMealDirectOwned', list);
+      mealDirectRenderOwned();
+    }));
+    row.append(title, info, copy, del);
+    mealDirectIssued.append(row);
+  });
+}
+// 直连码领取 — 在吃饭面板里识别并显示信息
+async function mealInspectDirectCode(code, request) {
+  const payload = mealDirectDecode(code);
+  let address;
+  try { address = new URL(payload?.url); } catch (_) {}
+  if (address?.protocol !== 'https:' || address.username || address.password || address.search || address.hash ||
+      typeof payload.key !== 'string' || !payload.key.trim() || payload.key.length > 1024 ||
+      !Array.isArray(payload.models) || !payload.models.length || payload.models.length > 200 ||
+      payload.models.some(model => typeof model !== 'string' || !model.trim()) ||
+      !Number.isInteger(payload.perPerson) || payload.perPerson < 1 || payload.perPerson > 10000) {
+    mealClaimNotice.textContent = '直连码格式不正确或已损坏。';
+    return;
+  }
+  let directId;
+  try {
+    const bytes = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(mealDirectEncode(payload)));
+    directId = Array.from(new Uint8Array(bytes), n => n.toString(16).padStart(2, '0')).join('');
+  } catch (_) {
+    if (request === mealInspectRequest) mealClaimNotice.textContent = '此浏览器暂时无法读取直连码。';
+    return;
+  }
+  if (request !== mealInspectRequest) return;
+  mealClaimNotice.textContent = '';
+  mealClaimReview.replaceChildren();
+  mealClaimReview.hidden = false;
+
+  const title = document.createElement('strong');
+  title.textContent = '🍽️大锅饭 · ' + (payload.name || '直连');
+  const badge = document.createElement('span');
+  badge.className = 'auto-hint';
+  badge.textContent = ' （直连模式）';
+  title.append(badge);
+
+  const facts = document.createElement('dl');
+  facts.className = 'meal-claim-facts';
+  const provider = payload.url.replace(/^https?:\/\//, '').split('/')[0];
+  [['接口地址', provider], ['每人请求上限', (payload.perPerson || '不限') + ' 次（本地计数）']].forEach(([label, value]) => {
+    const term = document.createElement('dt');
+    const detail = document.createElement('dd');
+    term.textContent = label;
+    detail.textContent = value;
+    facts.append(term, detail);
+  });
+
+  const models = document.createElement('details');
+  models.className = 'setting-fold meal-claim-models';
+  const modelHeading = document.createElement('summary');
+  modelHeading.textContent = '可用模型（' + payload.models.length + '）';
+  const modelList = document.createElement('ul');
+  payload.models.forEach(id => {
+    const item = document.createElement('li');
+    item.textContent = id;
+    modelList.append(item);
+  });
+  models.append(modelHeading, modelList);
+
+  const privacy = document.createElement('p');
+  privacy.className = 'auto-hint meal-claim-note';
+  privacy.textContent = '直连模式：聊天内容直接发给中转站，不经大锅饭后台。次数由浏览器本地计数，清除浏览数据后重置。';
+
+  // 检查是否已领取
+  const existIdx = apiPresets.findIndex(p => p?.mealDirectId === directId);
+
+  const confirm = document.createElement('button');
+  confirm.type = 'button';
+  confirm.className = 'action-btn btn-apply';
+  confirm.textContent = existIdx >= 0 ? '打开已领取预设' : '领取并保存预设';
+  mealInspectedCode = code;
+  confirm.addEventListener('click', () => mealBusy(confirm, async () => {
+    if (mealInspectedCode !== code) return;
+    const existing = apiPresets.findIndex(p => p?.mealDirectId === directId);
+    if (existing >= 0) {
+      setDraftApiConfig(presetApiConfig(apiPresets[existing]));
+      renderApiPresets(existing);
+      mealClaimNotice.textContent = '已切换到直连预设。在上方点「应用当前配置」即可使用。';
+      return;
+    }
+    const baseName = '🍽️大锅饭 · ' + (payload.name || '直连');
+    let name = baseName;
+    let suffix = 2;
+    while (apiPresets.some(preset => preset?.name === name)) name = baseName + ' ' + suffix++;
+    const index = apiPresets.push({
+      name, url: payload.url, key: payload.key, model: payload.models[0], temp: '0.80',
+      mealDirect: true, mealDirectId: directId, mealDirectLimit: payload.perPerson
+    }) - 1;
+    saveApiPresets(index);
+    setDraftApiConfig(presetApiConfig(apiPresets[index]));
+
+    renderApiPresets(index);
+    mealClaimNotice.textContent = '已保存直连预设。在上方点「应用当前配置」即可使用。';
+    confirm.textContent = '打开已领取预设';
+  }));
+  mealClaimReview.append(title, facts, models, privacy, confirm);
+}
+
+
+document.getElementById('mealDirectLoadModels').addEventListener('click', event => {
+  const address = mealDirectAddress.value.trim().replace(/\/+$/, '');
+  const key = mealDirectKey.value.trim();
+  const request = ++mealDirectIssuerRequest;
+  mealBusy(event.currentTarget, async () => {
+    if (!address || !key) { mealDirectSource.textContent = '请填写接口地址和 API Key。'; return; }
+    if (!mealDirectAddress.checkValidity() || !/^https:\/\//i.test(address)) {
+      mealDirectSource.textContent = '请填写以 HTTPS 开头的有效接口地址。';
+      return;
+    }
+    mealDirectSource.textContent = '正在获取模型…';
+    try {
+      const ids = await llmListModels(address, key);
+      if (request !== mealDirectIssuerRequest) return;
+      mealDirectFillModels(ids, ids.length === 1 ? ids[0] : '');
+      mealDirectSource.textContent = ids.length ? '已获取 ' + ids.length + ' 个模型，可以多选。' : '服务商没有返回可用模型。';
+    } catch (_) {
+      if (request === mealDirectIssuerRequest) mealDirectSource.textContent = '获取模型失败，请检查接口地址、Key 和网络。';
+    }
+  });
+});
+
+// 每张直连码按完整内容的摘要计次，旧版预设沿用之前的计数。
+function mealDirectGetUsage(preset) {
+  if (!preset?.mealDirect) return null;
+  const countKey = 'mphoneMealDirectCount:' + (preset.mealDirectId || preset.name);
+  return { countKey, used: mealRemember(countKey) || 0, limit: preset.mealDirectLimit || 0 };
+}
+function mealDirectCheckLimit(preset) {
+  const usage = mealDirectGetUsage(preset);
+  if (!usage?.limit) return true;
+  if (usage.used >= usage.limit) return false;
+  mealRemember(usage.countKey, usage.used + 1);
+  return true;
+}

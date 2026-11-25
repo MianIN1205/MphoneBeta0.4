@@ -113,6 +113,7 @@ const apiPresetSelect = document.getElementById('apiPresetSelect');
 const apiPresetList = document.getElementById('apiPresetList');
 const apiPresetSelectedName = document.getElementById('apiPresetSelectedName');
 var selectedApiPreset = -1;
+var draftMealDirectId = '';
 const apiPresetUpdate = document.getElementById('apiPresetUpdate');
 const apiPresetRename = document.getElementById('apiPresetRename');
 const apiPresetDelete = document.getElementById('apiPresetDelete');
@@ -132,19 +133,24 @@ function apiConfig(url, key, model, temp) {
 function readDraftApiConfig() {
   var model = modelDisplay.textContent.trim();
   var cfg = apiConfig(apiUrlInput.value.trim(), apiKey.value.trim(), model === '请选择模型' ? '' : model, tempSlider.value);
+  var direct = draftMealDirectId && apiPresets.find(preset => preset?.mealDirectId === draftMealDirectId);
+  if (direct) Object.assign(cfg, { mealDirect: true, mealDirectId: draftMealDirectId, mealDirectLimit: direct.mealDirectLimit });
   return draftMealCode ? mealConfig(cfg, draftMealCode) : cfg;
 }
 function readAppliedApiConfig() {
   var cfg = apiConfig(mphoneStore.load('mphone_api_url', ''), mphoneStore.load('mphone_api_key', ''),
     mphoneStore.load('mphone_model', ''), mphoneStore.load('mphone_temperature', '0.80'));
+  var directId = mphoneStore.load('mphone_api_meal_direct_id', '');
+  if (directId) cfg.mealDirectId = directId;
   var code = mphoneStore.load('mphone_api_meal_code', '');
   return code ? mealConfig(cfg, code) : cfg;
 }
 function sameApiConfig(a, b) {
-  return a.mealCode === b.mealCode && a.url === b.url && a.key === b.key && a.model === b.model && a.temp === b.temp;
+  return a.mealCode === b.mealCode && a.mealDirectId === b.mealDirectId && a.url === b.url && a.key === b.key && a.model === b.model && a.temp === b.temp;
 }
 function presetApiConfig(preset) {
   var cfg = apiConfig(preset.url, preset.key, preset.model, preset.temp);
+  if (preset.mealDirectId) cfg.mealDirectId = preset.mealDirectId;
   return preset.mealCode ? mealConfig(cfg, preset.mealCode) : cfg;
 }
 
@@ -157,7 +163,12 @@ function renderApiConnectionStatus() {
 }
 
 function apiPresetSummary(preset) {
-  return (preset.model || '未选择模型') + ' · 温度 ' + presetApiConfig(preset).temp.toFixed(2);
+  var base = (preset.model || '未选择模型') + ' · 温度 ' + presetApiConfig(preset).temp.toFixed(2);
+  if (preset.mealDirect && preset.mealDirectLimit) {
+    var usage = typeof mealDirectGetUsage === 'function' ? mealDirectGetUsage(preset) : null;
+    if (usage) base += ' · 已用 ' + usage.used + '/' + usage.limit + ' 次';
+  }
+  return base;
 }
 function renderApiPresets(index) {
   if (index !== undefined) selectedApiPreset = index;
@@ -201,6 +212,7 @@ function saveApiPresets(index) {
 function setDraftApiConfig(cfg) {
   resetApiModelList();
   draftMealCode = cfg.mealCode || '';
+  draftMealDirectId = cfg.mealDirectId || '';
   apiUrlInput.value = draftMealCode ? '' : cfg.url;
   apiKey.value = draftMealCode ? '' : cfg.key;
   mealCheckConfig(draftMealCode);
@@ -225,6 +237,8 @@ function applyApiConfig(cfg) {
   cfg = mealPersistentConfig(cfg);
   if (cfg.mealCode) mphoneStore.save('mphone_api_meal_code', cfg.mealCode);
   else mphoneStore.remove('mphone_api_meal_code');
+  if (cfg.mealDirectId) mphoneStore.save('mphone_api_meal_direct_id', cfg.mealDirectId);
+  else mphoneStore.remove('mphone_api_meal_direct_id');
   mphoneStore.save('mphone_api_url', cfg.url);
   mphoneStore.save('mphone_api_key', cfg.key);
   mphoneStore.save('mphone_temperature', cfg.temp.toFixed(2));
@@ -293,6 +307,11 @@ apiPresetUpdate.addEventListener('click', function() {
   var cfg = readDraftApiConfig();
   Object.assign(preset, mealPersistentConfig(cfg), { temp: cfg.temp.toFixed(2) });
   if (!cfg.mealCode) delete preset.mealCode;
+  if (!cfg.mealDirectId && preset.mealDirectId) {
+    delete preset.mealDirectId;
+    delete preset.mealDirectLimit;
+    delete preset.mealDirect;
+  }
   saveApiPresets(index);
   setApiPresetDrawer('');
   apiPresetSaveMenu.focus();

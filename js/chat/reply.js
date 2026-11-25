@@ -383,6 +383,20 @@ function sendMsg(userText, requestOnly, onDone, onFailure) {
   var isChatView = hist === getChatHistory(replyCharIdx);
   var gKey = genKey(replyChar, isChatView);
   if (genStates[gKey]) { showToast('正在回复中，可以先点 ⏹ 停止', 'error'); if (onDone) onDone([]); return; }
+  // 直连大锅饭本地计次检查
+  if (cfg.url && cfg.key && typeof mealDirectCheckLimit === 'function') {
+    var presetInUse = apiPresets.find(function(p) { return p && p.mealDirect && (cfg.mealDirectId
+      ? p.mealDirectId === cfg.mealDirectId : !p.mealDirectId && p.url === cfg.url && p.key === cfg.key); });
+    if (presetInUse && !mealDirectCheckLimit(presetInUse)) {
+      var limitErr = new Error('直连大锅饭的本地次数已用完（' + (presetInUse.mealDirectLimit || '?') + ' 次）');
+      if (onFailure) onFailure(limitErr, cfg);
+      else {
+        showErrNotice(limitErr, null, getActiveEmptyEl(), cfg);
+        if (onDone) onDone([]);
+      }
+      return;
+    }
+  }
   var listId = isChatView ? 'chatMsgList' : 'dramaMsgList';
   if (!requestOnly && userText) { var um = { role: 'user', content: userText, time: Date.now() }; hist.push(um); renderHistMsg(um); saveHistories(); }
   var typing = appendMsg('ai', '', true);

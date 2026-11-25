@@ -774,7 +774,15 @@ textarea.field-input { resize: vertical; font-family: inherit; line-height: 1.5;
 .meal-owned { margin-top: 8px; overflow-wrap: anywhere; }
 .meal-owned code { display: block; }
 .meal-owned .action-btn { margin: 4px 5px 0 0; }
-.meal-api-controls { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.meal-api-controls {
+  display: grid;
+  gap: 4px;
+  margin-top: 8px;
+  padding-block: 8px;
+}
+.meal-api-controls > .auto-hint { overflow-wrap: anywhere; }
+#settingsScreen .meal-api-controls > .auto-hint { margin: 0; }
+.meal-api-controls > .auto-hint:empty { display: none; }
 .meal-section #mealNotice:not(:empty) { margin-top: 8px; }
 
 .meal-claim-review {
