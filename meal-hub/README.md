@@ -6,6 +6,8 @@
 {"example":{"name":"示例服务商","url":"https://api.example.com/v1"}}
 ```
 
+`wrangler.jsonc` 的 `MEAL_PUBLIC_PROVIDERS` 保存仓库内的公开服务商名称和地址。`MEAL_PROVIDERS` 中同 ID 的部署配置优先，已有兑换码继续按原 ID 查找服务商。新增条目使用独立 ID。
+
 服务商地址不应带查询参数、账号、密钥或末尾的 chat/completions。已发出的码通过服务商 ID 查找上游，因此不要将已有 ID 重新指向另一家服务商。
 
 用 Cloudflare 账号运行 `npx wrangler secret put MEAL_SECRET` 写入至少 32 字符的随机秘密，再运行 `npx wrangler deploy`。保持该秘密稳定，否则旧兑换码加密的 Key 无法继续使用。部署后把 Worker 的 HTTPS 地址填进 index.html 的 mphone-meal-service 元标签，按项目惯例升级网页缓存版本后发布。仓库不需要保存任何真实密钥。兑换数据到期由后台自动删除，整张码用完或手动关闭时提前清除保存的 Key。

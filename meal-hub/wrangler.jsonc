@@ -5,7 +5,14 @@
   "preview_urls": false,
   "observability": { "enabled": false },
   "vars": {
-    "MEAL_ORIGIN": "https://mianin1205.github.io"
+    "MEAL_ORIGIN": "https://mianin1205.github.io",
+    "MEAL_PUBLIC_PROVIDERS": {
+      "ciwei": {"name":"刺猬","url":"https://cc.cwapi.vip/v1"},
+      "dazuzi": {"name":"大肘子","url":"https://api.dzzi.ai/v1"},
+      "zhiyun": {"name":"织云 API","url":"https://zhiyunapi.cc/v1"},
+      "ckf": {"name":"小鸡农场","url":"https://ckffai.com/v1"},
+      "blqs": {"name":"BLQS API（鸢尾花）","url":"https://api.blqs.cc/v1"}
+    }
   },
   "durable_objects": { "bindings": [{ "name": "MEALS", "class_name": "Meal" }] },
   "migrations": [{ "tag": "v1", "new_sqlite_classes": ["Meal"] }]

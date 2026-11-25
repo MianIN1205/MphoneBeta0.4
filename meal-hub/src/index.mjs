@@ -27,8 +27,11 @@ async function reveal(secret, saved) {
 function fail(status, message) {
   return Response.json({ error: { message } }, { status });
 }
+function providerEntries(env) {
+  return { ...env.MEAL_PUBLIC_PROVIDERS, ...JSON.parse(env.MEAL_PROVIDERS || '{}') };
+}
 function providerFor(env, id) {
-  const entries = JSON.parse(env.MEAL_PROVIDERS || '{}');
+  const entries = providerEntries(env);
   if (!Object.hasOwn(entries, id)) return null;
   const value = entries[id];
   const address = new URL(value.url);
@@ -155,7 +158,7 @@ async function route(request, env) {
   }
   if (path === '/source' || path === '/quota') {
     const address = String(body.address || '').replace(/\/+$/, '');
-    const id = Object.keys(JSON.parse(env.MEAL_PROVIDERS || '{}')).find(id => providerFor(env, id)?.url === address);
+    const id = Object.keys(providerEntries(env)).find(id => providerFor(env, id)?.url === address);
     if (!id) return fail(404, '这个接口暂未开放放饭');
     const provider = providerFor(env, id);
     if (path === '/quota') return readProviderQuota(provider, body.key);
