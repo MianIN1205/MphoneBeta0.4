@@ -448,6 +448,7 @@ function llmRequest(msgs, opts) {
     };
     if (!thinkOff) return once(null);
     // 只在响应明确点名思考参数时移除该参数，避免把附件错误或一般 400 再发一遍。
+    // 大锅饭场景：meal-hub 会透传涉及参数名（如「涉及参数：reasoning_effort」），也视为匹配。
     return once(thinkOff).catch(function(err) {
       if ((err && err.name === 'AbortError') || !err || !(err.status === 400 || err.status === 422)) throw err;
       if (!/reasoning[_\s-]effort/i.test(String(err.message))) throw err;

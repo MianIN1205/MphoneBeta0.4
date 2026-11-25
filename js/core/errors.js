@@ -319,6 +319,138 @@ function errRedact(text) {
 }
 var errInfoOverlay = document.getElementById('errInfoOverlay');
 var errInfoText = '';
+
+// =============================================
+// 智能诊断建议：根据当前 API 配置、模型名、报错类型生成上下文相关的具体建议
+// 只在弹窗打开时计算一次，不改变 ERROR_TABLE 的静态内容
+// =============================================
+function errSmartHints(d) {
+  var hints = [], ex = d.ex || {}, err = d.err || {}, ctx = d.ctx || {};
+  var model = String(ctx.model || err.model || '').toLowerCase();
+  var msg = String(err.message || '').toLowerCase();
+  var cfg = null;
+  try { cfg = typeof getApiCfg === 'function' ? getApiCfg() : null; } catch (_) {}
+  var isMeal = !!(cfg && cfg.mealCode);
+
+  // --- badreq：请求格式不被接受（400/405/409/415/422）---
+  if (ex.id === 'badreq') {
+    // reasoning_effort 参数
+    if (cfg && typeof llmThinkOff === 'function') {
+      var thinkOff = llmThinkOff(cfg);
+      if (thinkOff) {
+        var param = Object.keys(thinkOff)[0] || 'reasoning_effort';
+        hints.push('当前思维链设置会发送 ' + param + ' 参数，部分中转不认。试试：角色设置 → 聊天 → 思维链改成「模型自带的」');
+      }
+    }
+    // temperature
+    if (/temperature/.test(msg) && cfg) {
+      hints.push('当前模型可能不接受自定义温度。在预设或便捷拓展栏里把温度留空试试');
+    }
+    // 图片 / 音频
+    if (/image|vision|图片/.test(msg)) hints.push('报错提到了图片。如果刚发了图，试试用纯文字重发');
+    if (/audio|音频/.test(msg)) hints.push('报错提到了音频。如果刚发了语音，试试用纯文字重发');
+    // stream / tool
+    if (/stream/.test(msg)) hints.push('报错提到了 stream。部分接口不支持流式，可以在设置里关闭流式输出');
+    if (/tool|function/.test(msg)) hints.push('报错提到了工具调用。如果开了 MCP，试试暂时关掉');
+    // 大锅饭遮蔽
+    if (isMeal && /食材来源/.test(msg)) {
+      hints.push('大锅饭会隐藏上游的具体报错。上面列的都是可能的原因，逐个排查');
+    }
+  }
+
+  // --- capability：接口不支持本轮能力 ---
+  if (ex.id === 'capability') {
+    if (/image|vision|图片/.test(msg)) hints.push('具体是图片被拒。设置 → 附件测试 可以单独测试图片支持');
+    if (/audio|音频/.test(msg)) hints.push('具体是音频被拒。设置 → 附件测试 可以单独测试语音支持');
+    if (/tool|function|工具/.test(msg)) hints.push('具体是工具调用被拒。如果开了 MCP，试试暂时关掉');
+  }
+
+  // --- auth：密钥不对（401）---
+  if (ex.id === 'auth') {
+    if (isMeal) hints.push('你正在使用大锅饭，密钥由后台管理。可能是领取凭证过期了，回 设置 → 大锅饭 检查状态');
+  }
+
+  // --- money：余额不足（402）---
+  if (ex.id === 'money') {
+    if (isMeal) hints.push('大锅饭共享额度可能用完了，检查 设置 → 大锅饭 的剩余次数');
+    hints.push('快速切换：便捷拓展栏里选另一个 API 预设');
+  }
+
+  // --- forbidden：请求被拒（403）---
+  if (ex.id === 'forbidden') {
+    if (isMeal) hints.push('大锅饭的凭证可能无效或过期，回 设置 → 大锅饭 检查');
+    if (model) hints.push('当前模型「' + model + '」可能不在密钥分组的可用列表里');
+  }
+
+  // --- notfound / model：地址或模型不存在（404）---
+  if (ex.id === 'notfound' || ex.id === 'model') {
+    if (model) hints.push('当前模型名：' + model + ' — 确认拼写和是否还在线');
+    if (isMeal) hints.push('该模型可能不在饭票的可用列表里');
+  }
+
+  // --- ratelimit / rateTokens：请求限流（429）---
+  if (ex.id === 'ratelimit' || ex.id === 'rateTokens') {
+    if (isMeal) hints.push('大锅饭有请求间隔限制，等一会再试');
+    if (typeof charList !== 'undefined' && charList.length) {
+      var autoCount = 0;
+      charList.forEach(function(c) { if (c && c.chatCfg && c.chatCfg.actionOn) autoCount++; });
+      if (autoCount > 1) hints.push('你有 ' + autoCount + ' 个角色开着自主活动，它们也会占请求次数');
+    }
+  }
+
+  // --- timeout / gatewayTimeout：超时 ---
+  if (ex.id === 'timeout' || ex.id === 'gatewayTimeout') {
+    if (model && /deepseek.*r1|qwq|o[1-9]|gpt-5/.test(model)) {
+      hints.push('「' + model + '」是会思考的模型，回复时间更长，容易超时');
+    }
+  }
+
+  // --- server：服务异常（5xx）---
+  if (ex.id === 'server') {
+    if (isMeal) hints.push('大锅饭后台或上游服务商出错。如果大锅饭本身能访问（设置 → 大锅饭），问题可能在上游');
+  }
+
+  // --- empty：空回复 ---
+  if (ex.id === 'empty') {
+    if (cfg && typeof llmThinkOff === 'function' && !llmThinkOff(cfg) && model && /deepseek.*r1|qwq|o[1-9]/.test(model)) {
+      hints.push('这是会思考的模型，可能所有输出都花在了思考上。试试加大「最大输出长度」');
+    }
+  }
+
+  // --- refusal：安全审查 ---
+  if (ex.id === 'refusal') {
+    if (/claude/.test(model)) hints.push('Claude 的安全策略比较严格。便捷拓展栏里临时换个模型试试');
+  }
+
+  // --- context：上下文过长 ---
+  if (ex.id === 'context') {
+    hints.push('打开「自动总结」可以让旧聊天自动压缩，减少上下文长度');
+  }
+
+  // --- network：连接失败 ---
+  if (ex.id === 'network') {
+    var endpoint = ctx.url || err.url || '';
+    if (/^http:\/\//.test(endpoint)) hints.push('当前接口地址是 HTTP，小手机的 HTTPS 页面可能无法连接 HTTP 接口');
+  }
+
+  // --- format：返回 HTML ---
+  if (ex.id === 'format') {
+    hints.push('常见情况：地址末尾缺少 /v1，或者填的是中转站网页地址而不是 API 地址');
+  }
+
+  // --- region：地区受限 ---
+  if (ex.id === 'region') {
+    hints.push('部分服务商限制特定地区访问。如果用的中转站，联系中转站确认');
+  }
+
+  // --- overloaded：服务繁忙 ---
+  if (ex.id === 'overloaded') {
+    if (model) hints.push('「' + model + '」可能正在高峰期。便捷拓展栏里临时换个模型');
+  }
+
+  return hints;
+}
+
 function openErrInfo(d) {
   var fill = function(id, arr) {
     var ul = document.getElementById(id);
@@ -327,7 +459,11 @@ function openErrInfo(d) {
   };
   document.getElementById('errInfoTitle').textContent = d.summary || errShortLabel(d.err, d.ex);
   fill('errInfoReasons', d.ex.reasons.slice(0, 1));
-  fill('errInfoFixes', d.ex.fixes.slice(0, 2));
+  // 智能建议：在静态建议后追加根据当前配置状态生成的具体建议
+  var fixes = d.ex.fixes.slice(0, 2);
+  var smart = errSmartHints(d);
+  if (smart.length) fixes = fixes.concat(smart);
+  fill('errInfoFixes', fixes);
   var ctx = d.ctx || {};
   var endpoint = ctx.url || d.err.url;
   var host = '';

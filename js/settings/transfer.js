@@ -210,8 +210,10 @@ function xfRender() {
   if (r.chars.length) sec('角色');
   r.chars.forEach(function(c) {
     var n = c.msgs ? c.msgs.length : (c.msgCount || 0);
-    var el = row(c, 'on', c.name, [c.persona ? '人设 ' + c.persona.length + ' 字' : '', n ? '聊天 ' + n + ' 条' : '', c.mems.length ? '记忆 ' + c.mems.length + ' 条' : '',
-      c.books.length ? '世界书 ' + c.books.reduce(function(a, b) { return a + b.entries.length; }, 0) + ' 条' : ''].filter(Boolean).join(' · '));
+    var el = row(c, 'on', c.name, [c.avatar ? '头像' : '', c.persona ? '人设 ' + c.persona.length + ' 字' : '', n ? '聊天 ' + n + ' 条' : '', c.mems.length ? '记忆 ' + c.mems.length + ' 条' : '',
+      c.books.length ? '世界书 ' + c.books.reduce(function(a, b) { return a + b.entries.length; }, 0) + ' 条' : '',
+      (c.openings || []).length ? '开场白 ' + c.openings.length + ' 条' : '',
+      c.userPersona ? '用户人设' : ''].filter(Boolean).join(' · '));
     var same = xfSameChar(c.realName || c.name);
     pick(el, c, 'to', [['new', '新建一个角色']].concat(same ? [[same.id, '合并到已有的「' + (same.charAlias || same.charName) + '」']] : []));
     if (n) pick(el, c, 'msgTo', chatOpts);
@@ -286,8 +288,17 @@ function xfImport(ov) {
         fillCharForm({ charName: c.realName || c.name, charAlias: c.name, charPersona: c.persona || '', charAvatar: c.avatar || '', openings: c.openings || [] });
         ch = readCharForm();
         ch.id = genCharId(); ch.inChat = false;
+        // 新角色：用户人设写进 userImpressions
+        if (c.userPersona) ch.userImpressions = { '*': c.userPersona };
         charList.push(ch); syncCharCircle(ch);
         counts.char++;
+      } else {
+        // 合并到已有角色：补充缺失的头像、开场白、用户人设
+        if (!ch.charAvatar && c.avatar) { ch.charAvatar = c.avatar; }
+        if (!(ch.openings || []).length && (c.openings || []).length) { ch.openings = c.openings; }
+        if (c.userPersona && !(typeof impressionFor === 'function' ? impressionFor(ch.userImpressions, '*') : (ch.userImpressions || {})['*'])) {
+          ch.userImpressions = Object.assign({}, ch.userImpressions || {}, { '*': c.userPersona });
+        }
       }
       made[k] = ch;
       xfPutMsgs(ch, c.msgs, c.msgTo, r.from);
@@ -358,6 +369,17 @@ function xfFromNuojiji(j, file) {
     var cs = csMap[ch.id] || {};
     var avatar = ch.imageRef != null && imgMap[ch.imageRef] ? imgMap[ch.imageRef] : '';
 
+    // 开场白
+    var openings = [];
+    var greet = ch.greeting || ch.firstMessage || '';
+    if (typeof greet === 'string' && greet.trim()) openings.push(greet.trim());
+    (ch.alternateGreetings || []).forEach(function(g) { if (typeof g === 'string' && g.trim()) openings.push(g.trim()); });
+
+    // 用户人设
+    var userPersona = '';
+    if (cs.myPersona && typeof cs.myPersona === 'string' && cs.myPersona.trim()) userPersona = cs.myPersona.trim();
+    else if (cs.userPersona && typeof cs.userPersona === 'string' && cs.userPersona.trim()) userPersona = cs.userPersona.trim();
+
     // 消息
     var raw = msgMap[ch.id] || [];
     raw.sort(function(a, b) { return (a.timestamp || 0) - (b.timestamp || 0); });
@@ -396,7 +418,9 @@ function xfFromNuojiji(j, file) {
       avatar: avatar,
       msgs: msgs,
       mems: mems,
-      books: books
+      books: books,
+      openings: openings,
+      userPersona: userPersona
     });
   });
 
@@ -507,16 +531,21 @@ function xfFrom330(j, file) {
       });
     }
 
+    // 开场白：主 greeting + alternateGreetings
+    var openings = [];
+    if (typeof s.aiGreeting === 'string' && s.aiGreeting.trim()) openings.push(s.aiGreeting.trim());
+    (s.alternateGreetings || []).forEach(function(g) { if (typeof g === 'string' && g.trim()) openings.push(g.trim()); });
+
+    // 用户人设（放进 userPersona 字段，导入时会写进 userImpressions）
+    var userPersona = '';
+    if (s.myPersona && s.myPersona !== '我是谁呀。') userPersona = s.myPersona;
+
     // 其他信息用简短 txt 概括写进人设
     var extra = [];
     if (chat.originalName && chat.originalName !== (s.aiPersona || '').slice(0, 20) && chat.originalName !== chat.name)
       extra.push('原始角色名：' + chat.originalName);
-    if (s.myPersona && s.myPersona !== '我是谁呀。')
-      extra.push('用户人设：' + s.myPersona);
     if (chat.relationship && chat.relationship.status)
       extra.push('关系：' + chat.relationship.status);
-    if (Array.isArray(s.alternateGreetings) && s.alternateGreetings.length > 1)
-      extra.push('有 ' + s.alternateGreetings.length + ' 条备选开场白');
     var persona = s.aiPersona || '';
     if (extra.length) persona = persona + (persona ? '\n\n' : '') + '--- 从330小手机导入的补充信息 ---\n' + extra.join('\n');
 
@@ -527,7 +556,9 @@ function xfFrom330(j, file) {
       avatar: /^data:image\//.test(s.aiAvatar || '') ? s.aiAvatar : '',
       msgs: msgs,
       mems: mems,
-      books: books
+      books: books,
+      openings: openings,
+      userPersona: userPersona
     });
   });
 

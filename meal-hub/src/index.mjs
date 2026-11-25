@@ -311,7 +311,18 @@ export class Meal {
       });
       if (!response.ok) {
         // Do not expose arbitrary upstream errors, which can contain request details or credentials.
-        const message = response.status === 429 ? '食材来源限流，本次已计次' : '食材来源未能处理本次请求，本次已计次';
+        // Extract upstream parameter hints (parameter names only) so the client can auto-retry.
+        let hint = '';
+        try {
+          const upstream = await response.clone().json();
+          const detail = upstream && (upstream.error || upstream);
+          const raw = String(detail && (detail.message || detail.code || detail.type) || '');
+          // Whitelist: only pass through recognized parameter names mentioned in the error
+          const knownParams = ['reasoning_effort', 'temperature', 'max_tokens', 'max_completion_tokens', 'stream', 'tools', 'tool_choice'];
+          const mentioned = knownParams.filter(p => raw.toLowerCase().includes(p));
+          if (mentioned.length) hint = '（涉及参数：' + mentioned.join('、') + '）';
+        } catch { /* upstream body not JSON, skip */ }
+        const message = response.status === 429 ? '食材来源限流，本次已计次' : '食材来源未能处理本次请求，本次已计次' + hint;
         await response.body?.cancel().catch(() => {});
         return fail(response.status, message);
       }
