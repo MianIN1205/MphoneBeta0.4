@@ -220,7 +220,7 @@ function mediaTestImage(asChat) {
 document.getElementById('mediaTestImgBtn').addEventListener('click', function() { mediaTestImage(false); });
 document.getElementById('mediaClearBtn').addEventListener('click', function() {
   llmClearMediaSupport();
-  showToast('✓ 已重置所有媒体能力记录，下次发送时重新检测', 'success');
+  mediaTestResult('✓ 已重置媒体检测记录，下次发送时重新检测。', true);
 });
 document.getElementById('mediaTestAudioBtn').addEventListener('click', function() {
   var cfg = readDraftApiConfig();
