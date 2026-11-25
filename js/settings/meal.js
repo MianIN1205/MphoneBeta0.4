@@ -25,6 +25,9 @@ const mealIssued = document.getElementById('mealIssued');
 const mealHelpers = document.getElementById('mealApiHint');
 let mealInspectedCode = '';
 let mealIssuerRequest = 0;
+let mealQuotaRequest = 0;
+let mealQuotaTimer;
+const mealQuotaResult = document.getElementById('mealQuotaResult');
 
 function mealRemember(key, value) {
   if (value !== undefined) mphoneLocal.setItem(key, JSON.stringify(value));
@@ -121,6 +124,7 @@ function mealFillModels(ids, selected) {
 [mealIssueAddress, mealIssueKey].forEach(input => {
   input.addEventListener('input', () => {
     mealIssuerRequest++;
+    queueMealQuota();
     mealSource.textContent = '';
     mealModels.replaceChildren();
   });
@@ -146,6 +150,26 @@ document.getElementById('mealLoadModels').addEventListener('click', event => {
     }
   });
 });
+
+function queueMealQuota() {
+  clearTimeout(mealQuotaTimer);
+  const request = ++mealQuotaRequest;
+  mealQuotaResult.textContent = '';
+  const address = mealIssueAddress.value.trim().replace(/\/+$/, '');
+  const key = mealIssueKey.value.trim();
+  if (!key || !/^https:\/\//i.test(address) || !mealIssueAddress.checkValidity()) return;
+  mealQuotaTimer = setTimeout(async () => {
+    mealQuotaResult.textContent = '正在读取站内额度…';
+    try {
+      const result = await mealRequest('/quota', { address, key });
+      if (request !== mealQuotaRequest) return;
+      mealQuotaResult.textContent = result.unlimited ? '这把 Key 未设额度上限。' :
+        '这把 Key 的剩余额度 · ' + new Intl.NumberFormat('zh-CN', { maximumSignificantDigits: 12 }).format(result.available) + ' ' + result.unit;
+    } catch (error) {
+      if (request === mealQuotaRequest) mealQuotaResult.textContent = error.message;
+    }
+  }, 700);
+}
 
 mealIssueForm.addEventListener('submit', event => {
   event.preventDefault();

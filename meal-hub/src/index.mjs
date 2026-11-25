@@ -94,6 +94,47 @@ export default {
   }
 };
 
+async function readProviderQuota(provider, key) {
+  if (typeof key !== 'string' || !key.trim() || key.length > 1024) return fail(400, '请填写 API Key');
+  const base = new URL(provider.url).origin;
+  const init = { redirect: 'manual', signal: AbortSignal.timeout(8000) };
+  async function read(path, headers) {
+    const response = await fetch(base + path, { ...init, headers });
+    if (response.status < 300 || response.status >= 400) return response;
+    const location = response.headers.get('Location');
+    const canonical = base + (path.endsWith('/') ? path.slice(0, -1) : path + '/');
+    if (!location || new URL(location, base + path).href !== canonical) throw new Error('unexpected redirect');
+    response.body?.cancel().catch(() => {});
+    return fetch(canonical, { ...init, redirect: 'error', headers });
+  }
+  try {
+    const [status, usage] = await Promise.all([
+      read('/api/status'),
+      read('/api/usage/token/', { Authorization: 'Bearer ' + key.trim() })
+    ]);
+    if ([401, 403].includes(usage.status)) return fail(401, '站点拒绝了额度查询，请核对 Key 或查询权限');
+    if (!status.ok || !usage.ok) return fail(502, '站点没有返回可用的额度数据');
+    const config = (await status.json()).data;
+    const quota = (await usage.json()).data;
+    if (quota?.object !== 'token_usage') return fail(502, '站点没有返回单把 Key 的额度');
+    if (quota.unlimited_quota === true) return Response.json({ unlimited: true });
+    if (!Number.isSafeInteger(quota.total_available)) return fail(502, '站点没有返回这把 Key 的余额');
+    const units = { USD: ['$', 1], CNY: ['¥', config?.usd_exchange_rate],
+      CUSTOM: [config?.custom_currency_symbol, config?.custom_currency_exchange_rate], TOKEN: ['额度点', config?.quota_per_unit] };
+    const unit = Object.hasOwn(units, config?.quota_display_type) && units[config.quota_display_type];
+    if (!unit || typeof unit[0] !== 'string' || !unit[0].trim() || unit[0].length > 20 ||
+        !Number.isFinite(unit[1]) || unit[1] <= 0 ||
+        !Number.isFinite(config.quota_per_unit) || config.quota_per_unit <= 0) {
+      return fail(502, '站点额度单位未能识别');
+    }
+    const available = quota.total_available / config.quota_per_unit * unit[1];
+    if (!Number.isFinite(available)) return fail(502, '站点返回的额度无效');
+    return Response.json({ available, unit: unit[0] });
+  } catch {
+    return fail(502, '暂时无法读取站点额度，请稍后再试');
+  }
+}
+
 async function route(request, env) {
   const path = new URL(request.url).pathname;
   const actions = {
@@ -101,7 +142,7 @@ async function route(request, env) {
     '/close': 'close', '/models': 'models', '/chat/completions': 'chat'
   };
   const verb = path === '/models' ? 'GET' : 'POST';
-  if (request.method !== verb || (!['/create', '/source'].includes(path) && !Object.hasOwn(actions, path))) return fail(404, '接口不存在');
+  if (request.method !== verb || (!['/create', '/source', '/quota'].includes(path) && !Object.hasOwn(actions, path))) return fail(404, '接口不存在');
   if (!env.MEAL_SECRET || env.MEAL_SECRET.length < 32) return fail(503, '醞酿中，兑换服务尚未配置');
   const auth = (request.headers.get('Authorization') || '').replace(/^Bearer /, '').split('.');
   let body;
@@ -111,10 +152,13 @@ async function route(request, env) {
   } catch {
     return fail(400, '请求内容无效或太大');
   }
-  if (path === '/source') {
+  if (path === '/source' || path === '/quota') {
     const address = String(body.address || '').replace(/\/+$/, '');
     const id = Object.keys(JSON.parse(env.MEAL_PROVIDERS || '{}')).find(id => providerFor(env, id)?.url === address);
-    return id ? Response.json({ id, name: providerFor(env, id).name }) : fail(404, '这个预设的服务商暂未开放放饭');
+    if (!id) return fail(404, '这个接口暂未开放放饭');
+    const provider = providerFor(env, id);
+    if (path === '/quota') return readProviderQuota(provider, body.key);
+    return Response.json({ id, name: provider.name });
   }
   if (path === '/create') {
     const provider = providerFor(env, String(body.provider || ''));
