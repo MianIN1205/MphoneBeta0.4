@@ -61,6 +61,7 @@ function view(pot) {
   return {
     provider: pot.source, models: pot.models, expires: pot.expires, portions: pot.portions,
     perPerson: pot.perPerson, claimed: pot.claimed, total: pot.total, remaining: pot.remaining,
+    sharedBalance: pot.sharedBalance === true,
     state: pot.closed ? 'closed' : pot.expires <= Date.now() ? 'expired' : pot.remaining <= 0 ? 'spent' : 'active'
   };
 }
@@ -118,7 +119,7 @@ async function readProviderQuota(provider, key) {
     const quota = (await usage.json()).data;
     if (quota?.object !== 'token_usage') return fail(502, '站点没有返回单把 Key 的额度');
     if (quota.unlimited_quota === true) return Response.json({ unlimited: true });
-    if (!Number.isSafeInteger(quota.total_available)) return fail(502, '站点没有返回这把 Key 的余额');
+    if (quota.unlimited_quota !== false || !Number.isSafeInteger(quota.total_available)) return fail(502, '站点没有返回这把 Key 的余额');
     const units = { USD: ['$', 1], CNY: ['¥', config?.usd_exchange_rate],
       CUSTOM: [config?.custom_currency_symbol, config?.custom_currency_exchange_rate], TOKEN: ['额度点', config?.quota_per_unit] };
     const unit = Object.hasOwn(units, config?.quota_display_type) && units[config.quota_display_type];
@@ -168,12 +169,16 @@ async function route(request, env) {
         !models.length || models.length > 30 || models.some(model => typeof model !== 'string' || !model.trim() || model.length > 200) ||
         !validCount(body.portions, 1000) || !validCount(body.perPerson, 10000) ||
         !validCount(body.total, 100000) || !validCount(body.days, 30)) return fail(400, '请检查服务商、模型、额度和有效期');
+    const quotaResponse = await readProviderQuota(provider, body.key);
+    if (!quotaResponse.ok) return quotaResponse;
+    const balance = await quotaResponse.json();
+    if (balance.unlimited || !(balance.available > 0)) return fail(400, '请使用站点已设置额度上限且有余额的分享 Key');
     const code = randomHex(16);
     const owner = randomHex(32);
     const pot = {
       provider: body.provider, source: provider.name, models, key: await protect(env.MEAL_SECRET, body.key),
       owner: await hash(owner), expires: Date.now() + body.days * DAY, portions: body.portions,
-      perPerson: body.perPerson, claimed: 0, total: body.total, remaining: body.total, closed: false
+      perPerson: body.perPerson, claimed: 0, total: body.total, remaining: body.total, closed: false, sharedBalance: true
     };
     const response = await call(env, code, { action: 'create', pot });
     return response.ok ? Response.json({ code, owner, ...view(pot) }, { status: 201 }) : response;
@@ -224,7 +229,8 @@ export class Meal {
           delete current.key;
           await tx.put('pot', current);
         }
-        return Response.json(view(current));
+        return action === 'owner' && current.sharedBalance && current.key && summary.state === 'active'
+          ? { summary, provider: current.provider, encrypted: current.key } : Response.json(view(current));
       }
       const claimKey = 'claim:' + digest;
       let claim = await tx.get(claimKey);
@@ -237,7 +243,13 @@ export class Meal {
         await tx.put('pot', current);
       }
       if (!claim) return fail(403, '请先领取兑换码');
-      if (action === 'claim' || action === 'status') return Response.json(forClaim(current, claim));
+      if (action === 'claim' || action === 'status') {
+        const grant = forClaim(current, claim);
+        if (action === 'status' && current.sharedBalance && current.key && grant.state === 'active') {
+          return { summary: grant, provider: current.provider, encrypted: current.key };
+        }
+        return Response.json(grant);
+      }
       if (summary.state !== 'active' || claim.remaining <= 0) return fail(410, '兑换码已失效');
       if (action === 'models') return Response.json({ data: current.models.map(id => ({ id })) });
       if (!current.models.includes(body.model) || !Array.isArray(body.messages) || !body.messages.length) return fail(400, '模型或聊天内容无效');
@@ -257,6 +269,16 @@ export class Meal {
       return { url: provider.url, key: upstreamKey };
     });
     if (result instanceof Response) return result;
+    if (result.summary) {
+      const provider = providerFor(this.env, result.provider);
+      if (!provider) return Response.json(result.summary);
+      const key = await reveal(this.env.MEAL_SECRET, {
+        iv: Uint8Array.from(result.encrypted.iv), ciphertext: Uint8Array.from(result.encrypted.ciphertext)
+      });
+      const response = await readProviderQuota(provider, key);
+      if (response.ok) result.summary.upstreamBalance = await response.json();
+      return Response.json(result.summary);
+    }
     try {
       const fields = ['model', 'messages', 'stream', 'temperature', 'reasoning_effort', 'tools', 'tool_choice', 'max_tokens', 'max_completion_tokens'];
       const payload = Object.fromEntries(fields.filter(key => Object.hasOwn(body, key)).map(key => [key, body[key]]));

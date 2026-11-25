@@ -59,6 +59,13 @@ async function mealRequest(path, body, bearer) {
   }
   return result;
 }
+function mealBalanceText(summary) {
+  const quota = summary?.upstreamBalance;
+  if (!summary?.sharedBalance) return '';
+  if (quota?.unlimited) return '站点已取消这把 Key 的额度上限';
+  if (!Number.isFinite(quota?.available)) return '共享站内余额暂未读取';
+  return '站内共享余额 ' + new Intl.NumberFormat('zh-CN', { maximumSignificantDigits: 12 }).format(quota.available) + ' ' + quota.unit;
+}
 const mealStateLabel = { expired: '已到期', spent: '次数已用完', closed: '发码者已关闭', missing: '此浏览器没有领取凭证' };
 
 function mealShowConfig(code, state, summary) {
@@ -72,7 +79,7 @@ function mealShowConfig(code, state, summary) {
   eyeBtn.disabled = locked;
   document.getElementById('mealApiControls').hidden = !locked;
   if (locked) mealHelpers.textContent = summary && state === 'active'
-    ? '食材来源（服务商） · ' + summary.provider + '　剩余 ' + Math.min(summary.personalRemaining, summary.remaining) + ' 次'
+    ? '食材来源（服务商） · ' + summary.provider + '　剩余 ' + Math.min(summary.personalRemaining, summary.remaining) + ' 次' + (summary.sharedBalance ? ' · ' + mealBalanceText(summary) : '')
     : mealStateLabel[state] || '';
 }
 function mealCheckConfig(code) {
@@ -225,10 +232,11 @@ function mealRenderOwned() {
     }));
     function render(summary) {
       const total = summary.total;
-      const usage = Number.isInteger(total) ? '总额度 ' + total + ' 次 · 已用 ' + (total - summary.remaining) + ' 次 · ' : '';
+      const usage = Number.isInteger(total) ? '总请求上限 ' + total + ' 次 · 已用 ' + (total - summary.remaining) + ' 次 · ' : '';
       status.textContent = '已领 ' + summary.claimed + '/' + summary.portions + ' 份 · 每份 ' + summary.perPerson + ' 次 · ' +
         usage + '剩余 ' + summary.remaining + ' 次' +
-        (mealStateLabel[summary.state] ? ' · ' + mealStateLabel[summary.state] : '');
+        (mealStateLabel[summary.state] ? ' · ' + mealStateLabel[summary.state] : '') +
+        (summary.sharedBalance && summary.state === 'active' ? ' · ' + mealBalanceText(summary) : '');
       close.hidden = summary.state !== 'active';
     }
     function update(summary) {
@@ -268,7 +276,8 @@ mealClaimForm.addEventListener('submit', event => {
     const privacy = document.createElement('div');
     const confirm = document.createElement('button');
     description.textContent = '食材来源（服务商） · ' + summary.provider +
-      '　每份 ' + summary.perPerson + ' 次　' + new Date(summary.expires).toLocaleString() + ' 到期';
+      '　每份最多 ' + summary.perPerson + ' 次请求　' + new Date(summary.expires).toLocaleString() + ' 到期' +
+      (summary.sharedBalance ? '。所有领取者共用同一份站内余额，由站点扣费。' : '');
     models.textContent = '模型 · ' + summary.models.join(' / ');
     privacy.className = 'auto-hint';
     privacy.textContent = '使用时，聊天上下文及随请求发送的图片或语音会经过兑换后台，再发给这家服务商。';
