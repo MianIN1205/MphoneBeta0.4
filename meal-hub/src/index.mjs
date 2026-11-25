@@ -151,7 +151,7 @@ async function route(request, env) {
   const auth = (request.headers.get('Authorization') || '').replace(/^Bearer /, '').split('.');
   let body;
   try {
-    body = verb === 'GET' ? {} : await readJson(request, path === '/chat/completions' ? MAX_BODY : 16384);
+    body = verb === 'GET' ? {} : await readJson(request, path === '/chat/completions' ? MAX_BODY : path === '/create' ? 262144 : 16384);
     if (!body || typeof body !== 'object' || Array.isArray(body)) throw new Error('bad JSON');
   } catch {
     return fail(400, '请求内容无效或太大');
@@ -169,7 +169,7 @@ async function route(request, env) {
     const models = Array.isArray(body.models) ? [...new Set(body.models)] : [];
     if (!provider || typeof body.address !== 'string' || body.address.replace(/\/+$/, '') !== provider.url ||
         typeof body.key !== 'string' || !body.key.trim() || body.key.length > 1024 ||
-        !models.length || models.length > 30 || models.some(model => typeof model !== 'string' || !model.trim() || model.length > 200) ||
+        !models.length || models.length > 200 || models.some(model => typeof model !== 'string' || !model.trim() || model.length > 200) ||
         !validCount(body.portions, 1000) || !validCount(body.perPerson, 10000) ||
         !validCount(body.total, 100000) || !validCount(body.days, 30)) return fail(400, '请检查服务商、模型、额度和有效期');
     const quotaResponse = await readProviderQuota(provider, body.key);

@@ -5,10 +5,15 @@ const mealTokenPattern = /^[a-f0-9]{64}$/;
 const mealIdentityKey = 'mphoneMealBrowser';
 const mealDraftBlocks = document.getElementById('mealSection');
 const mealIssueForm = document.getElementById('mealIssueForm');
+const mealIssuePanel = document.getElementById('mealIssuePanel');
 const mealClaimForm = document.getElementById('mealClaimForm');
 const mealIssueAddress = document.getElementById('mealIssueAddress');
 const mealIssueKey = document.getElementById('mealIssueKey');
 const mealModels = document.getElementById('mealModels');
+const mealModelToggle = document.getElementById('mealModelToggle');
+const mealModelDrawer = document.getElementById('mealModelDrawer');
+const mealModelSummary = document.getElementById('mealModelSummary');
+const mealSelectAllModels = document.getElementById('mealSelectAllModels');
 const mealSource = document.getElementById('mealSource');
 const mealNotice = document.getElementById('mealNotice');
 const mealCodeInput = document.getElementById('mealCodeInput');
@@ -24,6 +29,10 @@ const mealClaimReview = document.getElementById('mealClaimReview');
 const mealIssued = document.getElementById('mealIssued');
 const mealHelpers = document.getElementById('mealApiHint');
 let mealInspectedCode = '';
+let mealInspectRequest = 0;
+let mealInspectTimer;
+const mealInspectButton = mealClaimForm.querySelector('button[type=submit]');
+const mealClaimNotice = document.getElementById('mealClaimNotice');
 let mealIssuerRequest = 0;
 let mealQuotaRequest = 0;
 let mealQuotaTimer;
@@ -44,10 +53,10 @@ function mealConfig(cfg, code) {
 function mealPersistentConfig(cfg) {
   return cfg.mealCode ? Object.assign({}, cfg, { url: '', key: '' }) : Object.assign({}, cfg);
 }
-async function mealRequest(path, body, bearer) {
+async function mealRequest(path, body, bearer, signal) {
   if (!mealBase) throw new Error('醞酿中，兑换服务尚未配置。');
   const response = await fetch(mealBase + path, {
-    method: 'POST', cache: 'no-store', credentials: 'omit', redirect: 'error',
+    method: 'POST', cache: 'no-store', credentials: 'omit', redirect: 'error', signal,
     headers: Object.assign({ 'Content-Type': 'application/json' }, bearer ? { Authorization: 'Bearer ' + bearer } : {}),
     body: JSON.stringify(body)
   });
@@ -116,6 +125,31 @@ function mealBusy(button, operation) {
     .finally(() => { button.disabled = false; });
 }
 
+function mealOpenModels(open) {
+  mealModelDrawer.hidden = !open;
+  mealModelToggle.setAttribute('aria-expanded', String(open));
+}
+mealModelToggle.addEventListener('click', () => mealOpenModels(mealModelDrawer.hidden));
+mealModelDrawer.addEventListener('keydown', event => {
+  if (event.key !== 'Escape') return;
+  mealOpenModels(false);
+  mealModelToggle.focus();
+});
+function mealUpdateModelSelection() {
+  const choices = [...mealModels.querySelectorAll('input[type=checkbox]')];
+  const selected = choices.filter(input => input.checked).length;
+  mealModelToggle.disabled = !choices.length;
+  mealModelSummary.textContent = choices.length ? '已选 ' + selected + ' / ' + choices.length + ' 个模型' : '选择模型';
+  mealSelectAllModels.hidden = !choices.length;
+  mealSelectAllModels.textContent = choices.every(input => input.checked) ? '取消全选' : '全选';
+}
+mealModels.addEventListener('change', mealUpdateModelSelection);
+mealSelectAllModels.addEventListener('click', () => {
+  const choices = [...mealModels.querySelectorAll('input[type=checkbox]')];
+  const select = choices.some(input => !input.checked);
+  choices.forEach(input => { input.checked = select; });
+  mealUpdateModelSelection();
+});
 function mealFillModels(ids, selected) {
   mealModels.replaceChildren();
   [...new Set(ids.filter(Boolean))].forEach(id => {
@@ -127,13 +161,15 @@ function mealFillModels(ids, selected) {
     field.append(checkbox, document.createTextNode(' ' + id));
     mealModels.append(field);
   });
+  mealUpdateModelSelection();
+  mealOpenModels(mealModels.childElementCount > 0);
 }
 [mealIssueAddress, mealIssueKey].forEach(input => {
   input.addEventListener('input', () => {
     mealIssuerRequest++;
     queueMealQuota();
     mealSource.textContent = '';
-    mealModels.replaceChildren();
+    mealFillModels([]);
   });
 });
 document.getElementById('mealLoadModels').addEventListener('click', event => {
@@ -186,6 +222,7 @@ mealIssueForm.addEventListener('submit', event => {
   const key = mealIssueKey.value.trim();
   mealBusy(event.submitter, async () => {
     if (!address || !key || !models.length) throw new Error('请填写地址和 Key，获取模型后至少选一个。');
+    if (models.length > 200) throw new Error('一张兑换码最多支持 200 个模型，请减少所选模型。');
     const source = await mealRequest('/source', { address });
     const made = await mealRequest('/create', {
       provider: source.id, address, key, models,
@@ -194,10 +231,10 @@ mealIssueForm.addEventListener('submit', event => {
     });
     const owned = mealRemember('mphoneMealOwned') || [];
     mealRemember('mphoneMealOwned', [{ ...made, total: made.total ?? Number(fields.get('total')) }, ...owned]);
-    mealIssueKey.value = '';
-    mealIssueKey.dispatchEvent(new Event('input'));
-    mealRenderOwned();
-    mealSetNotice('兑换码已生成，复制后私下分享。');
+    if (!mealIssuePanel.hidden) {
+      mealRenderOwned();
+      mealSetNotice('兑换码已生成，复制后私下分享。');
+    }
   });
 });
 
@@ -256,18 +293,39 @@ function mealRenderOwned() {
   });
 }
 
-mealCodeInput.addEventListener('input', () => {
+function mealResetInspection() {
+  clearTimeout(mealInspectTimer);
+  mealInspectRequest++;
+  mealInspectButton.disabled = false;
   mealInspectedCode = '';
   mealClaimReview.hidden = true;
   mealClaimReview.replaceChildren();
+  mealClaimNotice.textContent = '';
+}
+mealCodeInput.addEventListener('input', () => {
+  mealResetInspection();
+  if (mealCodePattern.test(mealReadCode())) mealInspectTimer = setTimeout(mealInspect, 300);
 });
 mealClaimForm.addEventListener('submit', event => {
   event.preventDefault();
-  mealBusy(event.submitter, async () => {
-    const code = mealReadCode();
-    if (!mealCodePattern.test(code)) throw new Error('请检查兑换码。');
-    const summary = await mealRequest('/inspect', { code });
-    if (mealReadCode() !== code) return;
+  mealInspect();
+});
+async function mealInspect() {
+  mealResetInspection();
+  const code = mealReadCode();
+  if (!mealCodePattern.test(code)) {
+    mealClaimNotice.textContent = '请粘贴完整的兑换码或分享文字。';
+    return;
+  }
+  const request = mealInspectRequest;
+  const signal = new AbortController();
+  const timeout = setTimeout(() => signal.abort(), 12000);
+  mealInspectButton.disabled = true;
+  mealClaimNotice.textContent = '正在查询兑换码…';
+  try {
+    const summary = await mealRequest('/inspect', { code }, undefined, signal.signal);
+    if (request !== mealInspectRequest || mealReadCode() !== code) return;
+    mealClaimNotice.textContent = '';
     const existing = mealActiveCredential(code);
     mealClaimReview.replaceChildren();
     mealClaimReview.hidden = false;
@@ -285,34 +343,64 @@ mealClaimForm.addEventListener('submit', event => {
     confirm.className = 'action-btn btn-apply';
     confirm.textContent = existing ? '打开已领取预设' : '领取并保存为测试 API 预设';
     confirm.disabled = summary.state !== 'active' || (!existing && summary.claimed >= summary.portions);
-    if (confirm.disabled) mealSetNotice(mealStateLabel[summary.state] || '领取名额已满。');
+    if (confirm.disabled) mealClaimNotice.textContent = mealStateLabel[summary.state] || '领取名额已满。';
     mealInspectedCode = code;
     confirm.addEventListener('click', () => mealBusy(confirm, async () => {
-      if (mealInspectedCode !== code) return;
-      const token = await mealBrowserToken(code);
-      const grant = await mealRequest('/claim', { code, browser: token });
-      mealRemember('mphoneMealClaim:' + code, Object.assign(grant, { token }));
-      let index = apiPresets.findIndex(preset => preset?.mealCode === code);
-      if (index < 0) {
-        const title = '测试 API · ' + grant.provider;
-        let name = title;
-        let suffix = 2;
-        while (apiPresets.some(preset => preset?.name === name)) name = title + ' ' + suffix++;
-        index = apiPresets.push({ name, mealCode: code, url: '', key: '', model: grant.models[0], temp: '0.80' }) - 1;
-        saveApiPresets(index);
+      try {
+        if (mealInspectedCode !== code) return;
+        mealClaimNotice.textContent = '正在领取…';
+        const token = await mealBrowserToken(code);
+        const grant = await mealRequest('/claim', { code, browser: token });
+        mealRemember('mphoneMealClaim:' + code, Object.assign(grant, { token }));
+        let index = apiPresets.findIndex(preset => preset?.mealCode === code);
+        if (index < 0) {
+          const title = '测试 API · ' + grant.provider;
+          let name = title;
+          let suffix = 2;
+          while (apiPresets.some(preset => preset?.name === name)) name = title + ' ' + suffix++;
+          index = apiPresets.push({ name, mealCode: code, url: '', key: '', model: grant.models[0], temp: '0.80' }) - 1;
+          saveApiPresets(index);
+        }
+        setDraftApiConfig(presetApiConfig(apiPresets[index]));
+        renderApiPresets(index);
+        mealClaimNotice.textContent = '已保存测试 API 预设。在上方点「应用当前配置」即可使用。';
+        confirm.textContent = '打开已领取预设';
+      } catch (error) {
+        if (mealInspectedCode === code) mealClaimNotice.textContent = error.message || '领取失败，请重试。';
       }
-      setDraftApiConfig(presetApiConfig(apiPresets[index]));
-      renderApiPresets(index);
-      mealSetNotice('已保存测试 API 预设。在上方点「应用当前配置」即可使用。');
     }));
     mealClaimReview.append(description, models, privacy, confirm);
-  });
+  } catch (error) {
+    if (request === mealInspectRequest) mealClaimNotice.textContent = error.status ? error.message : '暂时查不到兑换码，请点「查询兑换码」重试。';
+  } finally {
+    clearTimeout(timeout);
+    if (request === mealInspectRequest) mealInspectButton.disabled = false;
+  }
+}
+
+function mealResetIssueDraft() {
+  mealIssueForm.reset();
+  mealIssueKey.dispatchEvent(new Event('input'));
+}
+function mealLeaveIssuePanel() {
+  if (mealIssuePanel.hidden) return;
+  mealResetIssueDraft();
+  mealIssuePanel.hidden = true;
+  mealDraftBlocks.querySelector('[aria-controls="mealIssuePanel"]').setAttribute('aria-expanded', 'false');
+  mealPrivacy.hidden = true;
+  mealPrivacy.open = false;
+  mealSetNotice('');
+}
+backBtn.addEventListener('click', mealLeaveIssuePanel);
+document.querySelectorAll('#settingsSubnav .settings-subnav-item:not([data-stab="main-api"])').forEach(tab => {
+  tab.addEventListener('click', mealLeaveIssuePanel);
 });
 
 mealDraftBlocks.querySelectorAll('[data-meal-toggle]').forEach(button => {
   button.addEventListener('click', () => {
     const panel = document.getElementById(button.getAttribute('aria-controls'));
     const open = panel.hidden;
+    if (!mealIssuePanel.hidden && !(panel === mealIssuePanel && open)) mealResetIssueDraft();
     mealDraftBlocks.querySelectorAll('[data-meal-toggle]').forEach(tab => {
       const target = document.getElementById(tab.getAttribute('aria-controls'));
       target.hidden = !(target === panel && open);
