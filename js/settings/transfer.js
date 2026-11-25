@@ -48,7 +48,11 @@ function xfFromText(text, file) {
     if (lines.length > 1) j = lines;
   }
   var r = xfEmpty(file);
-  if (j) { xfScan(j, r); return r; }
+  if (j) {
+    var njj = xfFromNuojiji(j, file);
+    if (njj) return njj;
+    xfScan(j, r); return r;
+  }
   // 纯文字：当一份聊天记录
   var a = arcParse(s, file.name, null);
   r.loose.push({ msgs: a.msgs });
@@ -306,4 +310,136 @@ function xfImport(ov) {
   }).catch(function(err) { btn.disabled = false; btn.textContent = '导入'; showToast('✗ ' + ((err && err.message) || '导入失败'), 'error'); });
 }
 var xfFile = null;
+
+// ---------- 糯叽机（nuojiji）备份 ----------
+// 格式：{ version: 5, data: { structuredDB: { characters, messages, worldBooks, memory, chatSettings, imageStore, summaryEntries, … } } }
+// 文件是 .json.gz，xfRead 已经解压并走到 xfFromText → JSON.parse，这里只管识别和映射
+function xfFromNuojiji(j, file) {
+  var db = j && j.data && j.data.structuredDB;
+  if (!db || !Array.isArray(db.messages) || !Array.isArray(db.characters)) return null;
+  // 再确认一下：有 version 字段，且 characters 里有 imageRef / worldBook 这类糯叽机特有的字段
+  if (j.version == null || !db.characters.some(function(c) { return 'imageRef' in c || 'worldBook' in c; })) return null;
+
+  var r = xfEmpty(file);
+  r.from = '糯叽机';
+
+  // imageStore：id → data:image base64
+  var imgMap = {};
+  (db.imageStore || []).forEach(function(img) { if (img && img.id != null && typeof img.data === 'string') imgMap[img.id] = img.data; });
+
+  // worldBooks：id → { title, entries }
+  var wbMap = {};
+  (db.worldBooks || []).forEach(function(wb) { if (wb && wb.id != null) wbMap[wb.id] = wb; });
+
+  // chatSettings：characterId → { nickname, relationship, charToUserRelationship }
+  var csMap = {};
+  (db.chatSettings || []).forEach(function(cs) { if (cs && cs.characterId) csMap[cs.characterId] = cs; });
+
+  // memory：characterId → userFacts[]
+  var memMap = {};
+  (db.memory || []).forEach(function(m) { if (m && m.characterId) memMap[m.characterId] = m; });
+
+  // summaryEntries：characterId → summary（简短摘要）
+  var sumMap = {};
+  (db.summaryEntries || []).forEach(function(s) { if (s && s.characterId && s.summary) sumMap[s.characterId] = s.summary; });
+
+  // messages 按 characterId 分组
+  var msgMap = {};
+  db.messages.forEach(function(m) {
+    if (!m || !m.characterId) return;
+    (msgMap[m.characterId] = msgMap[m.characterId] || []).push(m);
+  });
+
+  // 解析每个角色
+  db.characters.forEach(function(ch) {
+    if (!ch || ch.isHelperAssistant) return;   // 跳过「软糯糯」助手
+    var cs = csMap[ch.id] || {};
+    var avatar = ch.imageRef != null && imgMap[ch.imageRef] ? imgMap[ch.imageRef] : '';
+
+    // 消息
+    var raw = msgMap[ch.id] || [];
+    raw.sort(function(a, b) { return (a.timestamp || 0) - (b.timestamp || 0); });
+    var msgs = raw.map(njiMsg).filter(Boolean);
+
+    // 世界书：角色绑定的 + 角色专属的（名字里带角色名的）
+    var books = [];
+    var wbIds = Array.isArray(ch.worldBook) ? ch.worldBook : [];
+    var usedWb = {};
+    wbIds.forEach(function(wbId) {
+      usedWb[wbId] = 1;
+      var wb = wbMap[wbId];
+      if (wb && wb.entries && wb.entries.length) books.push(njiWb(wb));
+    });
+
+    // 记忆
+    var mems = [];
+    var mem = memMap[ch.id];
+    if (mem && Array.isArray(mem.userFacts)) {
+      mem.userFacts.forEach(function(f) {
+        if (f && typeof f.content === 'string' && f.content.trim()) mems.push(f.content.trim());
+      });
+    }
+    // chatSettings 里的关系也记进记忆
+    if (cs.relationship) mems.push('用户和' + (cs.nickname || ch.name) + '的关系：' + cs.relationship);
+    if (cs.charToUserRelationship && cs.charToUserRelationship !== cs.relationship)
+      mems.push((cs.nickname || ch.name) + '认为和用户的关系：' + cs.charToUserRelationship);
+    // summaryEntries 里的摘要也加进记忆
+    var sum = sumMap[ch.id];
+    if (sum) mems.push('糯叽机摘要：' + sum);
+
+    r.chars.push({
+      name: cs.nickname || ch.name,
+      realName: ch.name,
+      persona: ch.description || '',
+      avatar: avatar,
+      msgs: msgs,
+      mems: mems,
+      books: books
+    });
+  });
+
+  // 没有绑给任何角色的世界书 → 公共世界书
+  (db.worldBooks || []).forEach(function(wb) {
+    if (!wb || !wb.entries || !wb.entries.length) return;
+    // 检查是否有角色绑定了它
+    var bound = db.characters.some(function(ch) { return Array.isArray(ch.worldBook) && ch.worldBook.indexOf(String(wb.id)) >= 0; });
+    if (!bound) r.books.push(njiWb(wb));
+  });
+
+  return r.chars.length || r.books.length ? r : null;
+}
+
+// 单条消息转换
+function njiMsg(m) {
+  if (!m || !m.text || !String(m.text).trim()) return null;
+  // type=state → 状态栏（糯叽机的「状态更新」，sender 是 them）
+  if (m.type === 'state') {
+    var st = { r: 'status', t: arcStatusText(String(m.text)), time: m.timestamp || 0, k: 'status' };
+    return st.t.trim() ? st : null;
+  }
+  // type=pat → 拍了拍（sender 是 system）
+  if (m.type === 'pat') return { r: 'sys', t: String(m.text), time: m.timestamp || 0, k: 'text' };
+  var role = m.sender === 'me' ? 'user' : m.sender === 'them' ? 'char' : '';
+  if (!role) return null;
+  var msg = { r: role, t: String(m.text), time: m.timestamp || 0, k: 'text' };
+  return msg.t.trim() ? arcKind(msg) : null;
+}
+
+// 世界书转换
+function njiWb(wb) {
+  return {
+    name: String(wb.title || wb.name || '导入的世界书').slice(0, 30),
+    entries: (wb.entries || []).map(function(e) {
+      if (!e || !e.content) return null;
+      return {
+        name: String(e.name || '导入条目').slice(0, 60),
+        keywords: e.constant ? '' : (typeof e.keys === 'string' ? e.keys : Array.isArray(e.keys) ? e.keys.filter(Boolean).join(',') : ''),
+        content: String(e.content),
+        pos: 'before',
+        enabled: true
+      };
+    }).filter(Boolean)
+  };
+}
+
 document.getElementById('dataTransferRow').addEventListener('click', xfOpen);
