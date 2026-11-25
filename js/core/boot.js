@@ -1,4 +1,4 @@
-// 眠花糖机 — 启动：还原边框模式、加载功能模块、注册离线缓存。
+﻿// 眠花糖机 — 启动：还原边框模式、加载功能模块、注册离线缓存。
 
 // 外观模式按设备记住。首次打开时，窄屏贴边，电脑和平板用竖屏边框。
 var mphoneFullViewport = matchMedia('(max-width: 560px) and (orientation: portrait)');
@@ -15,7 +15,7 @@ document.body.classList.toggle('phone-fullscreen', mphoneInitialFull);
 
 // 版本号：index.html 里的样式、boot.js 和下面加载的脚本网址都带 ?v=这个数，sw.js 里也是同一个（改了东西推之前跑 tools/bump-version.py 一起加一）。
 // 这样新的页面只会要新版本的文件、旧页面只要旧的，不会像以前网慢时那样新页面配上手机里存的旧脚本（外观里图标预设空着，用户遇到过）
-var MPHONE_V = '175';
+var MPHONE_V = '176';
 // 存储就绪后，按顺序加载各功能脚本（普通脚本，直接打开本地文件也能用）
 var MPHONE_SCRIPTS = [
   "js/core/utils.js",
@@ -140,6 +140,20 @@ function hideBootSplash() {
 }
 var bootSplashFallback = setTimeout(hideBootSplash, 10000);
 
+// 有桌面快照时先显示首屏，初始化完成前暂时屏蔽交互。
+var bootDeskPreview = document.getElementById('bootSplash') && document.getElementById('deskGrid').classList.contains('desk-ready');
+var bootPhone = document.querySelector('.phone');
+function finishBoot() {
+  if (bootDeskPreview) bootPhone.inert = false;
+  hideBootSplash();
+}
+if (bootDeskPreview) {
+  bootPhone.inert = true;
+  hideBootSplash();
+  // 快照已经揭开载入页，仍为初始化异常保留交互恢复。
+  bootSplashFallback = setTimeout(finishBoot, 10000);
+}
+
 mphoneStore.init().then(function() {
   MPHONE_SCRIPTS.forEach(function(src, i) {
     var s = document.createElement('script');
@@ -147,11 +161,11 @@ mphoneStore.init().then(function() {
     s.async = false;   // 动态插入的脚本按插入顺序执行
     s.onerror = function() {
       console.error('[Mphone] 功能脚本加载失败:', src);
-      if (i === MPHONE_SCRIPTS.length - 1) hideBootSplash();
+      if (i === MPHONE_SCRIPTS.length - 1) finishBoot();
     };
     if (i === MPHONE_SCRIPTS.length - 1) s.onload = function() {
       mphoneReadyFns.forEach(function(fn) { try { fn(); } catch (e) { console.error(e); } });
-      hideBootSplash();
+      finishBoot();
     };
     document.body.appendChild(s);
   });

@@ -24,7 +24,7 @@ function xfRead(file) {
       return xfDataUrl(file).then(function(av) { var r = xfEmpty(file); r.chars.push(xfFromCard(JSON.parse(s), av)); return r; });
     });
     if (u[0] === 0x50 && u[1] === 0x4b) {
-      if (!/\.docx$/i.test(file.name)) throw new Error('压缩包（zip）还认不了，先解压，导入里面的文件');
+      if (!/\.docx$/i.test(file.name)) throw new Error('压缩包（zip）还认不了，先解压，导入里面的文件（330小手机的分片备份也是这样）');
       return file.arrayBuffer().then(readDocxText).then(function(t) { return xfFromText(t, file); });
     }
     // gzip：先当 uwu / ovo 的完整备份读（一行一行读，几百 MB 也不卡）；不是的话解压了按普通文件认
@@ -51,6 +51,8 @@ function xfFromText(text, file) {
   if (j) {
     var njj = xfFromNuojiji(j, file);
     if (njj) return njj;
+    var ep = xfFrom330(j, file);
+    if (ep) return ep;
     xfScan(j, r); return r;
   }
   // 纯文字：当一份聊天记录
@@ -439,6 +441,138 @@ function njiWb(wb) {
         enabled: true
       };
     }).filter(Boolean)
+  };
+}
+
+// ---------- 330小手机 / EPhone 备份 ----------
+// 格式：version 1 → { version:1, chats:[], worldBooks:[], memories:[], … }
+//       version 3 → { version:3, data:{ chats:[], worldBooks:[], … } }
+//       version 4 分片 ZIP → 用户解压后单个 slice_N.json：{ version:4, type:'slice', data:{ chats:[], … } }
+// 文件名特征：330-EPhone-Full-Backup / 330-EPhone-Sliced-Backup
+function xfFrom330(j, file) {
+  // 拿到 chats 和 worldBooks 所在的层（v1 直接在顶层，v3/v4 在 j.data 下）
+  var src = null;
+  if (j && Array.isArray(j.chats) && j.chats.length) src = j;
+  else if (j && j.data && Array.isArray(j.data.chats) && j.data.chats.length) src = j.data;
+  if (!src) return null;
+  // 确认是 EPhone：chat 对象里有 settings.aiPersona + history 数组 + history 里的 role 是 user/assistant
+  var sample = src.chats.filter(function(c) { return c && c.settings && typeof c.settings.aiPersona === 'string' && Array.isArray(c.history); })[0];
+  if (!sample) return null;
+  if (sample.history.length && !sample.history.some(function(m) { return m && (m.role === 'user' || m.role === 'assistant'); })) return null;
+
+  var r = xfEmpty(file);
+  r.from = '330小手机';
+
+  // worldBooks：id → 对象
+  var wbMap = {};
+  (src.worldBooks || []).forEach(function(wb) { if (wb && wb.id) wbMap[wb.id] = wb; });
+
+  // memories 表：按 chatId 分组
+  var memByChatId = {};
+  (src.memories || []).forEach(function(m) {
+    if (!m || !m.chatId) return;
+    (memByChatId[m.chatId] = memByChatId[m.chatId] || []).push(m);
+  });
+
+  // 遍历每个 chat
+  src.chats.forEach(function(chat) {
+    if (!chat || !chat.settings) return;
+    var s = chat.settings;
+    // 跳过群聊
+    if (chat.isGroup) return;
+
+    // 消息
+    var raw = chat.history || [];
+    var msgs = raw.map(ep330Msg).filter(Boolean);
+
+    // 世界书：通过 linkedWorldBookIds 关联
+    var books = [];
+    (s.linkedWorldBookIds || []).forEach(function(wbId) {
+      var wb = wbMap[wbId];
+      if (wb) books.push(ep330Wb(wb));
+    });
+
+    // 记忆：longTermMemory + memories 表 + normalMemory
+    var mems = [];
+    (chat.longTermMemory || []).forEach(function(m) {
+      if (m && typeof m.content === 'string' && m.content.trim()) mems.push(m.content.trim());
+    });
+    (memByChatId[chat.id] || []).forEach(function(m) {
+      var t = m.content || m.text || m.memory;
+      if (typeof t === 'string' && t.trim()) mems.push(t.trim());
+    });
+    if (chat.normalMemory && Array.isArray(chat.normalMemory.entries)) {
+      chat.normalMemory.entries.forEach(function(e) {
+        if (e && typeof e.text === 'string' && e.text.trim()) mems.push(e.text.trim());
+      });
+    }
+
+    // 其他信息用简短 txt 概括写进人设
+    var extra = [];
+    if (chat.originalName && chat.originalName !== (s.aiPersona || '').slice(0, 20) && chat.originalName !== chat.name)
+      extra.push('原始角色名：' + chat.originalName);
+    if (s.myPersona && s.myPersona !== '我是谁呀。')
+      extra.push('用户人设：' + s.myPersona);
+    if (chat.relationship && chat.relationship.status)
+      extra.push('关系：' + chat.relationship.status);
+    if (Array.isArray(s.alternateGreetings) && s.alternateGreetings.length > 1)
+      extra.push('有 ' + s.alternateGreetings.length + ' 条备选开场白');
+    var persona = s.aiPersona || '';
+    if (extra.length) persona = persona + (persona ? '\n\n' : '') + '--- 从330小手机导入的补充信息 ---\n' + extra.join('\n');
+
+    r.chars.push({
+      name: chat.name || chat.originalName || '未命名',
+      realName: chat.originalName || chat.name || '',
+      persona: persona,
+      avatar: /^data:image\//.test(s.aiAvatar || '') ? s.aiAvatar : '',
+      msgs: msgs,
+      mems: mems,
+      books: books
+    });
+  });
+
+  // 没有绑给任何角色的世界书 → 公共世界书
+  var usedWbIds = {};
+  src.chats.forEach(function(chat) {
+    if (!chat || !chat.settings) return;
+    (chat.settings.linkedWorldBookIds || []).forEach(function(id) { usedWbIds[id] = 1; });
+  });
+  (src.worldBooks || []).forEach(function(wb) {
+    if (!wb || usedWbIds[wb.id]) return;
+    var converted = ep330Wb(wb);
+    if (converted.entries.length) r.books.push(converted);
+  });
+
+  return r.chars.length || r.books.length ? r : null;
+}
+
+// 单条消息转换
+function ep330Msg(m) {
+  if (!m || typeof m.content !== 'string' || !m.content.trim()) return null;
+  var role = m.role === 'user' ? 'user' : m.role === 'assistant' ? 'char' : '';
+  if (!role) return null;
+  var msg = { r: role, t: String(m.content), time: m.timestamp || 0, k: 'text' };
+  return arcKind(msg);
+}
+
+// 世界书转换：EPhone 的 content 是数组 [{ keys, comment, content, enabled }]
+function ep330Wb(wb) {
+  var entries = [];
+  var raw = wb.content || wb.entries || [];
+  if (!Array.isArray(raw)) raw = [];
+  raw.forEach(function(e) {
+    if (!e || typeof e.content !== 'string' || !e.content.trim()) return;
+    entries.push({
+      name: String(e.comment || e.name || '导入条目').slice(0, 60),
+      keywords: Array.isArray(e.keys) ? e.keys.filter(Boolean).join(',') : (typeof e.keys === 'string' ? e.keys : ''),
+      content: String(e.content),
+      pos: 'before',
+      enabled: e.enabled !== false
+    });
+  });
+  return {
+    name: String(wb.name || wb.title || '导入的世界书').slice(0, 30),
+    entries: entries
   };
 }
 

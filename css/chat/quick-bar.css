@@ -40,10 +40,12 @@
 .cr-qb-item-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .cr-qb-item-sub { flex-shrink: 0; font-size: 11px; color: #aaa; font-weight: 400; }
 .cr-qb-model-preset .cr-qb-item-sub { max-width: 66%; overflow-wrap: anywhere; text-align: right; } padding: 10px; font-size: 12px; color: #aaa; text-align: center; }
-/* 世界书：一本一行，「条目」展开后一条条单独勾；只勾了一部分的书名淡一点粉 */
+/* 世界书：点分类名展开/收起，展开后整本开关 + 每条单独勾；只勾了一部分的书名淡一点粉 */
 .cr-qb-item.part { color: #c77a92; }
 .cr-qb-expand { flex-shrink: 0; margin-left: 6px; border: none; border-radius: 8px; padding: 3px 8px; font: inherit; font-size: 11px; background: rgba(0,0,0,0.05); color: #999; cursor: pointer; }
 .cr-qb-item.cr-qb-sub { margin-left: 14px; font-size: 12px; padding-top: 6px; padding-bottom: 6px; }
+.cr-qb-item.cr-qb-wb-all { margin-left: 14px; padding: 5px 10px; gap: 8px; font-size: 12px; color: #694d5f; font-weight: 500; background: rgba(251,238,245,.5); border-radius: 8px; }
+.cr-qb-wb-all input { width: 14px; height: 14px; margin: 0; accent-color: #bc698b; cursor: pointer; }
 /* 思维链弹层最下面「在聊天里显示思考」：和上面的选项隔开一点 */
 .cr-qb-item.cr-qb-toggle { margin-top: 6px; border-top: 1px solid rgba(0,0,0,0.05); border-radius: 0 0 8px 8px; }
 /* 仿siya：拓展栏挤进顶栏那一行（js/chat/room.js 的 crQbPlace），只显示值、胶囊缩小 */
