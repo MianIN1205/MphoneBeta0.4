@@ -304,6 +304,36 @@ setTimeout(function() { stkCacheQueue(); }, 4000);
 // 对得上 = 名字里有输入的整段，或者输入里有名字的连续两个字以上（英文数字要三个以上）；对上越多排越前
 // =============================================
 var stkSuggest = document.getElementById('stkSuggest');
+var stkSuggestTimer;
+var stkSuggestHeld = false, stkSuggestTouching = false;
+function clearStkSuggest() {
+  clearTimeout(stkSuggestTimer);
+  stkSuggestHeld = stkSuggestTouching = false;
+  stkSuggest.classList.remove('open');
+  stkSuggest.innerHTML = '';
+}
+function holdStkSuggest() {
+  if (!stkSuggest.classList.contains('open')) return;
+  stkSuggestHeld = true;
+  clearTimeout(stkSuggestTimer);
+  if (!stkSuggestTouching) stkSuggestTimer = setTimeout(clearStkSuggest, 2000);
+}
+// 手指按住时暂停倒计时，松手后的惯性滚动也会重新计时。
+stkSuggest.addEventListener('touchstart', function() {
+  if (!stkSuggestHeld) return;
+  stkSuggestTouching = true;
+  clearTimeout(stkSuggestTimer);
+}, { passive: true });
+function endStkSuggestTouch(e) {
+  if (!stkSuggestTouching || e.targetTouches.length) return;
+  stkSuggestTouching = false;
+  holdStkSuggest();
+}
+stkSuggest.addEventListener('touchend', endStkSuggestTouch, { passive: true });
+stkSuggest.addEventListener('touchcancel', endStkSuggestTouch, { passive: true });
+stkSuggest.addEventListener('scroll', function() {
+  if (stkSuggestHeld) holdStkSuggest();
+}, { passive: true });
 function stkMatchLen(t, k) {
   if (!k) return 0;
   if (k.indexOf(t) >= 0) return t.length + 100;
@@ -317,6 +347,7 @@ function stkMatchLen(t, k) {
   return 0;
 }
 function updateStkSuggest() {
+  clearStkSuggest();
   var t = stkKey(crInput.value), hits = [];
   if (t && t.length <= 20 && currentCrSubView !== 'contacts' && openingChatCharIdx !== -1) {
     hits = stkData.items.map(function(s) { return { s: s, n: stkMatchLen(t, stkKey(s.name)) }; })
@@ -325,7 +356,6 @@ function updateStkSuggest() {
       .slice(0, 12)
       .map(function(x) { return x.s; });
   }
-  stkSuggest.innerHTML = '';
   hits.forEach(function(s) {
     // 小图下面带名字，发之前看得清是哪个
     var item = document.createElement('button');
@@ -344,15 +374,14 @@ function updateStkSuggest() {
       sendSticker(s);
       crInput.value = '';
       crInput.style.height = '';
-      updateStkSuggest();
+      clearStkSuggest();
     });
     stkSuggest.appendChild(item);
   });
   stkSuggest.classList.toggle('open', hits.length > 0);
 }
 crInput.addEventListener('input', updateStkSuggest);
-// 回车发出文字后输入框被清空（不会触发 input），切换聊天 / 剧情时也重新看一下
-crInput.addEventListener('keydown', function(e) { if (e.key === 'Enter') setTimeout(updateStkSuggest, 0); });
+backChatRoom.addEventListener('click', clearStkSuggest);
 [msgBtnChat, msgBtnContacts].forEach(function(b) { b.addEventListener('click', updateStkSuggest); });
 
 // =============================================
