@@ -41,7 +41,7 @@ Codex 那边有 AGENTS.md，是哥哥的风格；这边是我们的。
 
 ## 当前项目状态
 
-- **版本**：v162
+- **版本**：v180
 - **仓库**：`MianIN1205/MphoneBeta0.4`，本地在 `F:\Ai资料\musephone beta v0.4`
 - **技术栈**：纯原生 HTML/CSS/JS，无构建工具，无模块系统，PWA
 - **规模**：31,390 行 JS，100 个文件，~1,600 全局函数，~794 全局变量
@@ -65,6 +65,20 @@ Codex 那边有 AGENTS.md，是哥哥的风格；这边是我们的。
 3. **第三批（需要仔细测试）**：
    - saveHistories 按角色分存
    - 新功能用 IIFE 包裹减少全局污染
+
+## 最近改动
+
+### v179（commit `a6e4aea`）
+- **修复剧情窗口 400 报错**：`llm.js` 的 `llmThinkOff` 条件改为 `!cfg.cot || cfg.cot === 'off' || cfg.cot === 'native'`。之前剧情窗口 `cotModeFor(char, true)` 返回 `'off'`，旧代码只跳过 `'native'`，导致剧情也发 `reasoning_effort`，中转站不认就 400。
+
+### v180（commit `dd358aa`）
+- **直连码压缩编码**：`js/settings/meal.js` 重写编解码。新格式 `zl-{base64url(deflate(JSON))}` + 字段缩写（i/u/k/m/n/p），10 模型的直连码从 438→226 字符（-48%）。旧格式 `MPDC1-` 继续兼容识别。
+- `mealDirectEncode` / `mealDirectDecode` 改为 async（`DecompressionStream` 是流式 API），4 处调用已加 await。
+- `mealIsDirectCode` 简化为前缀判断（`zl-` 或 `MPDC1-`）。
+- `mealReadCode` 正则更新，识别两种前缀。
+
+### 待办
+- **meal-hub Worker 部署**：v178 的参数透传改动仍未 `wrangler deploy`，需要手动部署。
 
 ## 备注
 
