@@ -103,13 +103,13 @@ function mealBalanceText(summary) {
   if (!Number.isFinite(quota?.available)) return '共享站内余额暂未读取';
   return '站内共享余额 ' + new Intl.NumberFormat('zh-CN', { maximumSignificantDigits: 12 }).format(quota.available) + ' ' + quota.unit;
 }
-const mealStateLabel = { expired: '已到期', spent: '次数已用完', closed: '发码者已关闭', missing: '此浏览器没有领取凭证' };
+const mealStateLabel = { expired: '已到期', spent: '次数已用完', closed: '发码者已关闭', paused: '已暂停', missing: '此浏览器没有领取凭证' };
 
 function mealShowConfig(code, state, summary) {
   // 检查当前 draft 是否来自直连预设
   const directPreset = !code && apiPresets.find(p => p?.mealDirect && (draftMealDirectId ? p.mealDirectId === draftMealDirectId : !p.mealDirectId && p.url === apiUrlInput.value.trim() && p.key === apiKey.value.trim()));
   const locked = !!code || !!directPreset;
-  const label = !code ? (directPreset ? '正在使用直连预设' : '') : state === 'active' ? '正在使用兑换码' : '兑换码已失效';
+  const label = !code ? (directPreset ? '正在使用直连预设' : '') : state === 'active' ? '正在使用兑换码' : state === 'paused' ? '饭票已暂停' : '兑换码已失效';
   [apiUrlInput, apiKey].forEach(input => {
     input.disabled = locked;
     if (locked) input.placeholder = label;
@@ -273,6 +273,62 @@ mealIssueForm.addEventListener('submit', event => {
   });
 });
 
+function mealOwnedRow(pot, name, onRename, onDelete, shareText) {
+  const row = document.createElement('div');
+  row.className = 'meal-owned';
+  const head = document.createElement('div');
+  head.className = 'meal-owned-head';
+  const title = document.createElement('strong');
+  title.className = 'meal-owned-name';
+  title.textContent = title.title = mealPresetTitle(pot);
+  function button(label) {
+    const item = document.createElement('button');
+    item.type = 'button';
+    item.className = 'action-btn btn-apply';
+    item.textContent = label;
+    return item;
+  }
+  const edit = button('编辑');
+  const remove = button('删除');
+  const copy = button('复制');
+  head.append(title, edit, remove, copy);
+  const code = document.createElement('code');
+  code.textContent = pot.code.slice(0, 6) + '…' + pot.code.slice(-4);
+  row.append(head, code);
+  copy.addEventListener('click', () => mealBusy(copy, async () => {
+    await navigator.clipboard.writeText(shareText());
+    mealSetNotice('已复制饭票和使用说明。');
+  }));
+  remove.addEventListener('click', () => onDelete(remove));
+  edit.addEventListener('click', () => {
+    const form = document.createElement('form');
+    form.className = 'meal-owned-edit';
+    const input = document.createElement('input');
+    input.className = 'field-input';
+    input.setAttribute('aria-label', '饭票名称');
+    input.maxLength = 40;
+    input.required = true;
+    input.value = name;
+    const cancel = button('取消');
+    const save = button('保存');
+    save.type = 'submit';
+    form.append(input, cancel, save);
+    head.replaceWith(form);
+    input.focus();
+    input.select();
+    cancel.addEventListener('click', () => { form.replaceWith(head); edit.focus(); });
+    form.addEventListener('submit', event => {
+      event.preventDefault();
+      mealBusy(save, async () => {
+        const next = input.value.trim();
+        if (!next) { input.focus(); throw new Error('请输入饭票名称。'); }
+        await onRename(next);
+      });
+    });
+  });
+  return row;
+}
+
 function mealRenderOwned() {
   mealIssued.replaceChildren();
   const owned = mealRemember('mphoneMealOwned') || [];
@@ -283,25 +339,57 @@ function mealRenderOwned() {
     mealIssued.append(empty);
   }
   owned.forEach(pot => {
-    const row = document.createElement('div');
-    row.className = 'meal-owned';
-    const title = document.createElement('div');
-    title.textContent = mealPresetTitle(pot);
-    const code = document.createElement('code');
-    code.textContent = pot.code;
+    const auth = pot.code + '.' + pot.owner;
+    const removeRecord = () => {
+      const items = mealRemember('mphoneMealOwned') || [];
+      mealRemember('mphoneMealOwned', items.filter(item => item.code !== pot.code));
+      mealRenderOwned();
+    };
+    let state = pot.state;
+    let statusChanged = false;
+    const row = mealOwnedRow(pot, pot.name || pot.provider, async name => {
+      try { update(await mealRequest('/rename', { name }, auth)); }
+      catch (error) {
+        if (error.status !== 410) throw error;
+        update({ ...pot, name, state: 'expired' });
+      }
+      mealRenderOwned();
+    }, button => {
+      const manageable = !state || state === 'active' || state === 'paused';
+      openConfirm('删除这张饭票的记录？', removeRecord, {
+        desc: manageable ? '只删除记录会保留当前启用状态，同时移除本机的管理入口。' : '这张饭票的记录会从本机移除。',
+        okText: '只删记录',
+        ...(manageable ? { alt: '作废并删除', onAlt: () => mealBusy(button, async () => {
+          try { await mealRequest('/close', {}, auth); }
+          catch (error) { if (error.status !== 410) throw error; }
+          removeRecord();
+        }) } : {})
+      });
+    }, () => '🍲 眠花糖机大锅饭兑换码：' + pot.code + '\n' + mealPresetTitle(pot) + '\n' + mealShareNote);
     const status = document.createElement('div');
     status.className = 'auto-hint';
-    const copy = document.createElement('button');
-    const check = document.createElement('button');
-    const close = document.createElement('button');
-    [copy, check, close].forEach(button => { button.type = 'button'; button.className = 'action-btn btn-apply'; });
-    copy.textContent = '复制码';
-    check.textContent = '查用量';
-    close.textContent = '关闭兑换';
-    copy.addEventListener('click', () => mealBusy(copy, async () => {
-      await navigator.clipboard.writeText('🍲 眠花糖机大锅饭兑换码：' + pot.code + '\n' + mealPresetTitle(pot) + '\n' + mealShareNote);
-      mealSetNotice('已复制兑换码和使用说明。');
+    const footer = document.createElement('div');
+    footer.className = 'meal-owned-status';
+    const toggle = document.createElement('button');
+    toggle.type = 'button';
+    toggle.className = 'action-btn btn-apply';
+    toggle.hidden = true;
+    toggle.addEventListener('click', () => mealBusy(toggle, async () => {
+      const enabled = state === 'paused';
+      const summary = await mealRequest('/enabled', { enabled }, auth);
+      statusChanged = true;
+      update(summary);
+      if (summary.state === 'active' || summary.state === 'paused') {
+        const claim = mealActiveCredential(pot.code);
+        if (claim) {
+          const state = enabled && claim.personalRemaining <= 0 ? 'spent' : summary.state;
+          const updated = mealRemember('mphoneMealClaim:' + pot.code, { ...claim, ...summary, state });
+          if (draftMealCode === pot.code) mealShowConfig(pot.code, state, updated);
+        }
+      }
+      mealSetNotice(enabled ? '饭票已启用。' : '饭票已暂停。');
     }));
+    footer.append(status, toggle);
     function render(summary) {
       const total = summary.total;
       const usage = Number.isInteger(total) ? '总请求上限 ' + total + ' 次 · 已用 ' + (total - summary.remaining) + ' 次 · ' : '';
@@ -309,7 +397,10 @@ function mealRenderOwned() {
         usage + '剩余 ' + summary.remaining + ' 次' +
         (mealStateLabel[summary.state] ? ' · ' + mealStateLabel[summary.state] : '') +
         (summary.sharedBalance && summary.state === 'active' ? ' · ' + mealBalanceText(summary) : '');
-      close.hidden = summary.state !== 'active';
+      state = summary.state;
+      toggle.hidden = state !== 'paused' && state !== 'active';
+      toggle.textContent = state === 'paused' ? '启用' : '关闭';
+      toggle.setAttribute('aria-label', toggle.textContent + '饭票');
     }
     function update(summary) {
       render(summary);
@@ -317,14 +408,16 @@ function mealRenderOwned() {
       mealRemember('mphoneMealOwned', items.map(item => item.code === pot.code ? { ...item, ...summary } : item));
     }
     if (Number.isInteger(pot.claimed)) render(pot);
-    else status.textContent = '点「查用量」获取领取和使用记录。';
-    check.addEventListener('click', () => mealBusy(check, async () => update(await mealRequest('/owner', {}, pot.code + '.' + pot.owner))));
-    close.addEventListener('click', () => openConfirm('关闭后，已领取的测试预设也会失效。确认关闭？', () => {
-      mealBusy(close, async () => update(await mealRequest('/close', {}, pot.code + '.' + pot.owner)));
-    }));
-    row.append(title, code, status, copy, check, close);
+    else status.textContent = '正在读取用量…';
+    row.append(footer);
     mealIssued.append(row);
-    if (mealBase && pot.state !== 'closed') mealRequest('/owner', {}, pot.code + '.' + pot.owner).then(update).catch(() => {});
+    if (mealBase && pot.state !== 'closed') mealRequest('/owner', {}, auth).then(summary => {
+      if (row.isConnected && !statusChanged) update(summary);
+    }).catch(error => {
+      if (!row.isConnected || statusChanged) return;
+      if (error.status === 410) { state = 'expired'; toggle.hidden = true; status.textContent = '已到期'; }
+      else if (!Number.isInteger(pot.claimed)) status.textContent = '暂时读不到用量。';
+    });
   });
 }
 
@@ -580,31 +673,32 @@ function mealDirectRenderOwned() {
     mealDirectIssued.append(empty);
     return;
   }
-  owned.forEach((pot, idx) => {
-    const row = document.createElement('div');
-    row.className = 'meal-owned';
-    const title = document.createElement('div');
-    title.textContent = '🍙 ' + (pot.name || '直连码');
+  owned.forEach(pot => {
+    const row = mealOwnedRow(pot, pot.name, name => {
+      const list = mealRemember('mphoneMealDirectOwned') || [];
+      mealRemember('mphoneMealDirectOwned', list.map(item => item.code === pot.code ? { ...item, name } : item));
+      mealDirectRenderOwned();
+    }, () => openConfirm('删除这张饭票的记录？', () => {
+      const list = mealRemember('mphoneMealDirectOwned') || [];
+      mealRemember('mphoneMealDirectOwned', list.filter(item => item.code !== pot.code));
+      mealDirectRenderOwned();
+    }, { desc: '已分享的直连饭票仍可用。' }),
+    () => '🍙 眠花糖机大锅饭直连码：' + pot.code + '\n' + mealPresetTitle(pot) + '\n' + mealDirectShareNote);
     const info = document.createElement('div');
     info.className = 'auto-hint';
     info.textContent = pot.models.length + ' 个模型 · 每人 ' + pot.perPerson + ' 次';
-    const copy = document.createElement('button');
-    const del = document.createElement('button');
-    [copy, del].forEach(button => { button.type = 'button'; button.className = 'action-btn btn-apply'; });
-    copy.textContent = '复制码';
-    del.textContent = '删除';
-    copy.addEventListener('click', () => mealBusy(copy, async () => {
-      const shareText = '🍙 眠花糖机大锅饭直连码：' + pot.code + '\n🍽️大锅饭 · ' + (pot.name || '直连') + '\n' + mealDirectShareNote;
-      await navigator.clipboard.writeText(shareText);
-      mealSetNotice('已复制直连码。');
+    const footer = document.createElement('div');
+    footer.className = 'meal-owned-status';
+    const manage = document.createElement('button');
+    manage.type = 'button';
+    manage.className = 'action-btn btn-apply';
+    manage.textContent = '启用／关闭';
+    manage.addEventListener('click', () => openConfirm('在服务商官网管理直连饭票', null, {
+      desc: '进入服务商的 API 密钥管理，启用或停用这张饭票使用的 Key。同一把 Key 发出的其他直连饭票也会一起受影响。',
+      okText: '知道了'
     }));
-    del.addEventListener('click', () => openConfirm('删除这条直连码记录？已分享出去的码仍然可用。', () => {
-      const list = mealRemember('mphoneMealDirectOwned') || [];
-      list.splice(idx, 1);
-      mealRemember('mphoneMealDirectOwned', list);
-      mealDirectRenderOwned();
-    }));
-    row.append(title, info, copy, del);
+    footer.append(info, manage);
+    row.append(footer);
     mealDirectIssued.append(row);
   });
 }

@@ -65,7 +65,7 @@ function view(pot) {
     provider: pot.source, name: pot.name || pot.source, models: pot.models, expires: pot.expires, portions: pot.portions,
     perPerson: pot.perPerson, claimed: pot.claimed, total: pot.total, remaining: pot.remaining,
     sharedBalance: pot.sharedBalance === true,
-    state: pot.closed ? 'closed' : pot.expires <= Date.now() ? 'expired' : pot.remaining <= 0 ? 'spent' : 'active'
+    state: pot.closed ? 'closed' : pot.expires <= Date.now() ? 'expired' : pot.remaining <= 0 ? 'spent' : pot.paused ? 'paused' : 'active'
   };
 }
 function forClaim(pot, claim) {
@@ -143,7 +143,7 @@ async function route(request, env) {
   const path = new URL(request.url).pathname;
   const actions = {
     '/inspect': 'inspect', '/claim': 'claim', '/status': 'status', '/owner': 'owner',
-    '/close': 'close', '/models': 'models', '/chat/completions': 'chat'
+    '/close': 'close', '/rename': 'rename', '/enabled': 'enabled', '/models': 'models', '/chat/completions': 'chat'
   };
   const verb = path === '/models' ? 'GET' : 'POST';
   if (request.method !== verb || (!['/create', '/source', '/quota'].includes(path) && !Object.hasOwn(actions, path))) return fail(404, '接口不存在');
@@ -194,7 +194,11 @@ async function route(request, env) {
   const code = publicAction ? body.code : auth[0];
   const token = action === 'claim' ? body.browser : auth[1];
   if (!CODE.test(String(code)) || (action !== 'inspect' && !TOKEN.test(String(token)))) return fail(400, '兑换码或领取凭证无效');
-  return call(env, code, { action, token, body: action === 'chat' ? body : undefined });
+  if (action === 'rename' && (typeof body.name !== 'string' || body.name.length > 40 || !body.name.trim() || /[\r\n]/.test(body.name))) {
+    return fail(400, '请输入 1 至 40 字的饭票名称');
+  }
+  if (action === 'enabled' && typeof body.enabled !== 'boolean') return fail(400, '请选择启用或关闭饭票');
+  return call(env, code, { action, token, body: ['chat', 'rename', 'enabled'].includes(action) ? body : undefined });
 }
 function call(env, code, data) {
   const object = env.MEALS.get(env.MEALS.idFromName(code));
@@ -228,8 +232,19 @@ export class Meal {
       if (!current) return fail(410, '兑换码已失效');
       const summary = view(current);
       if (action === 'inspect') return Response.json(summary);
-      if (action === 'owner' || action === 'close') {
+      if (action === 'owner' || action === 'close' || action === 'rename' || action === 'enabled') {
         if (digest !== current.owner) return fail(403, '管理凭证无效');
+        if (action === 'enabled') {
+          if (summary.state !== 'active' && summary.state !== 'paused') return fail(410, '饭票已失效，无法更改启用状态');
+          current.paused = !body.enabled;
+          await tx.put('pot', current);
+          return Response.json(view(current));
+        }
+        if (action === 'rename') {
+          current.name = body.name.trim();
+          await tx.put('pot', current);
+          return Response.json(view(current));
+        }
         if (action === 'close') {
           current.closed = true;
           delete current.key;
@@ -238,6 +253,7 @@ export class Meal {
         return action === 'owner' && current.sharedBalance && current.key && summary.state === 'active'
           ? { summary, provider: current.provider, encrypted: current.key } : Response.json(view(current));
       }
+      if (summary.state === 'paused' && action !== 'status') return fail(409, '发饭人已暂停这张饭票');
       const claimKey = 'claim:' + digest;
       let claim = await tx.get(claimKey);
       if (action === 'claim' && !claim) {

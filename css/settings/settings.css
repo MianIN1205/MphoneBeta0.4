@@ -763,7 +763,9 @@ textarea.field-input { resize: vertical; font-family: inherit; line-height: 1.5;
 .meal-form > .action-btn { justify-self: start; }
 .meal-limits { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
 .meal-limits label, .meal-models label { min-width: 0; overflow-wrap: anywhere; }
-.meal-model-picker .action-btn { flex: none; }
+.meal-model-picker { grid-template-columns: minmax(0, 1fr) auto; }
+#settingsScreen .meal-model-picker .action-btn { padding-inline: 12px; white-space: nowrap; }
+#mealDirectForm .meal-limits { grid-template-columns: minmax(0, 1fr); }
 .meal-model-drawer[hidden], .meal-model-drawer button[hidden] { display: none; }
 .meal-model-drawer { max-height: none; }
 .meal-model-drawer > button { border-bottom: 1px solid rgba(0,0,0,0.045); }
@@ -771,9 +773,26 @@ textarea.field-input { resize: vertical; font-family: inherit; line-height: 1.5;
 .meal-models label { display: flex; align-items: center; gap: 8px; padding: 8px 10px; }
 .meal-models label + label { border-top: 1px solid rgba(0,0,0,0.045); }
 .meal-models input { flex: none; }
-.meal-owned { margin-top: 8px; overflow-wrap: anywhere; }
+.meal-owned {
+  display: grid;
+  gap: 5px;
+  padding: 8px 0;
+  min-width: 0;
+  border-bottom: 1px dashed rgba(179, 114, 126, 0.28);
+}
+.meal-owned-head { display: flex; align-items: center; gap: 4px; min-width: 0; }
+.meal-owned-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.meal-owned-name, .meal-claim-review > strong { font-size: 13px; font-weight: 600; line-height: 1.4; }
+.meal-claim-review > strong { overflow-wrap: anywhere; }
+#settingsScreen .meal-owned-head .action-btn { flex: none; white-space: nowrap; }
 .meal-owned code { display: block; }
-.meal-owned .action-btn { margin: 4px 5px 0 0; }
+.meal-owned-status { display: flex; justify-content: space-between; align-items: center; gap: 6px; }
+.meal-owned-status .auto-hint { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+#settingsScreen .meal-owned-status .action-btn { flex: none; white-space: nowrap; }
+.meal-owned-status button[hidden] { display: none; }
+.meal-owned-edit { display: flex; gap: 4px; align-items: center; }
+.meal-owned-edit .field-input { flex: 1; width: 0; min-width: 0; }
+.meal-owned-edit .action-btn { flex: none; }
 .meal-api-controls {
   display: grid;
   gap: 4px;
