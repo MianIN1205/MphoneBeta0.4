@@ -440,7 +440,7 @@ function buildMsgs(idx, histOverride, historySession, preview) {
   var sysContent = (MPHONE_FICTION_NOTE + (sys ? '\n\n' + sys : '') + (extra ? '\n\n【你和{{user}}的资料】\n' + extra : '')).trim();
   var msgs = sysContent ? [{ role: 'system', content: sysContent, previewLabel: '系统提示词与角色资料' }] : [];
   // 系统内置助手：应用说明 + 已开启的权限
-  var assistantSys = (typeof assistantPrompt === 'function') ? assistantPrompt(char) : '';
+  var assistantSys = (typeof assistantPrompt === 'function') ? assistantPrompt(char, histOverride || getActiveHistory(idx)) : '';
   if (assistantSys) msgs.push({ role: 'system', content: assistantSys });
   // 社交圈：认识谁 + 能看到的最近动态
   var feedSys = (typeof feedContextFor === 'function') ? feedContextFor(char) : '';

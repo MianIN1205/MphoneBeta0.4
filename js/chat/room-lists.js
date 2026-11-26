@@ -435,6 +435,7 @@ function scrollPendingLists() {
 }
 
 function renderRoomLists(idx) {
+  if (typeof seedMianinIntro === 'function') seedMianinIntro(charList[idx]);
   // 聊天子视图
   var list = document.getElementById('chatMsgList');
   var emptyDiv = document.createElement('div');

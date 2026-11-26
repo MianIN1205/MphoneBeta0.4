@@ -65,6 +65,7 @@ function sendCrDraft(allowQuoteOnly) {
   var text = crInput.value.trim();
   if (!text && allowQuoteOnly && pendingQuote && pendingQuote.ref) text = '再看一下这条记录。';
   if (!text || openingChatCharIdx === -1) return;
+  if (typeof attachMianinWorkTag === 'function') text = attachMianinWorkTag(text);
   appendUserMsg(text);
   crInput.value = '';
   crInput.style.height = '';

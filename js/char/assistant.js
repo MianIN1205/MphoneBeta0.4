@@ -148,10 +148,11 @@ var ASSISTANT_ROOM_HINT =
   '拓展栏用 #crQuickBar、.cr-qb-chip；加号抽屉用 #crPlusPanel、.cr-plus-box 和 .cr-plus-label。普通图片、表情包、语音、转账、礼物和居中提示分别用 .img-bubble、.sticker-bubble、.voice-bubble-inner、.private-card-transfer、.private-card-gift、.cr-recall-notice 和 .cr-mcp-notice。美化卡片用固定样例，放大后可展开加号菜单。' +
   '提交前在心里按上面的结构过一遍，确认每个选择器都选得到，写完整、不要只写半截。';
 
-function assistantPrompt(char) {
+function assistantPrompt(char, history) {
   if (!isAssistantOn(char)) return '';
   var cfg = assistantCfg(char);
   var out = [ASSISTANT_GUIDE];
+  out.push('消息开头的【文件 · …】或【美化 · …】是快捷栏所选的任务标签。结合正文识别具体要求。美化只处理用户指定的区域和改动。你能收到操作卡的草稿数据，但看不到预览画面。');
   var acts = [];
 
   if (cfg.wb) {
@@ -176,24 +177,32 @@ function assistantPrompt(char) {
     acts.push('<mphone-action>{"type":"del_worldbook","name":"要删的条目名"}</mphone-action>');
   }
   if (cfg.css) {
+    var currentRequest = assistantLookRequest(history || []);
+    var seeLiveStyles = assistantAskedForLiveStyle(currentRequest);
     out.push('【权限 · 设计界面 CSS】用户想改界面样子时，你可以写 CSS 并提交。只改用户点名的角色、窗口和部件。修改一处时写最小范围的选择器和属性，其他地方的颜色、布局、开关和模板照旧。用户明确要求改全局才用 target "global"，明确要求重做整套才用 mode "replace"。美化拓展栏只改样式，显示由角色设置开关控制。' +
       'target 为角色名时写进该角色的聊天室专属样式（mode 可选 "append" 追加 或 "replace" 替换，默认追加）；再加 "view":"drama" 就是改这个角色的剧情窗口，可以同时用 "format" 把剧情窗口的显示格式换成 "bubble"（气泡）、"box"（文本框：像酒馆那样一整块带框的，CSS 用来调框的样子）或 "custom"（自定义：排版和文本框一样，但不带颜色和边框，样子全靠你写的 CSS，要把背景、顶栏、每一块的框、头像、名字时间、旁白 .cr-narr、输入栏都照顾到）；还可以同时带上 "boxLayout"（头像位置："center" 居中 / "side" 左右，用户在右、角色在左 / "left" 左对齐）、"boxStyle"（文本框模板，只在 box 里有："soft" 柔和，颜色跟主题 / "glass" 毛玻璃 / "paper" 书页 / "night" 夜色）、"boxMeta"（true/false，显示楼层和字数）、"boxActs"（true/false，显示编辑按钮）。局部换颜色或细节时，保留原有显示格式和模板。只有用户明确要改用文本框时才选 box 和对应模板；明确要重做整套布局时才考虑 custom。' + ASSISTANT_CSS_HINT +
       '\n' + ASSISTANT_ROOM_HINT +
-      '\n以下只提供 CSS 摘录。局部修改时，把新增 CSS 作为补丁追加，只提交用户要求修改的字段；不要根据摘录重写旧设计。已有窗口的显示格式和模板只有在用户明确要求更换时才传入。\n当前全局 CSS 摘录：\n' + (globalCss ? globalCss.slice(0, 3000) : '（空）') +
-      '\n各角色的现有样式摘录：\n' + charList.filter(function(c) { return c.customCss || c.dramaLook; }).slice(0, 6).map(function(c) {
-        var dl = c.dramaLook || {}, fmt = { bubble: '气泡', box: '文本框', custom: '自定义', text: '文本框' }[(dl.look || {}).format] || '气泡';
-        return '· ' + (c.charAlias || c.charName) + '：聊天窗口 CSS ' + (c.customCss ? '「' + c.customCss.slice(0, 600) + '」' : '（空）') +
-          '；剧情窗口格式 ' + fmt + '，剧情窗口 CSS ' + (dl.customCss ? '「' + dl.customCss.slice(0, 600) + '」' : '（空）');
-      }).join('\n') + '\n卡片上会自动显示一张缩小版的效果图，用户看了满意就点「应用」，不满意会让你再改。');
-    // 各角色现在的状态栏：开没开、正则、美化 HTML、卡片 CSS（太长的截一段），祂改之前先看
-    var stLines = charList.filter(function(c) { return c.look && (c.look.statusOn || c.look.statusTpl || c.look.statusCss); }).slice(0, 6).map(function(c) {
-      var l = Object.assign({}, DEFAULT_LOOK, c.look || {});
-      return '· ' + (c.charAlias || c.charName) + '：' + (l.statusOn ? '开着' : '关着') + '；匹配正则「' + String(l.statusFind || '').slice(0, 200) + '」；美化 HTML「' + String(l.statusTpl || '').slice(0, 800) + '」；卡片 CSS「' + String(l.statusCss || '').slice(0, 400) + '」；生成规则约 ' + String(l.statusRules || '').length + ' 字';
-    });
+      '\n卡片会用样例画预览。用户看完可点击「应用」，或让你继续改。');
+    if (seeLiveStyles) {
+      var requested = charList.filter(function(c) {
+        return [c.charAlias, c.charName].some(function(name) { return name && currentRequest.indexOf(name) >= 0; });
+      });
+      var source = requested.length ? requested : charList.filter(function(c) { return c.customCss || c.dramaLook; }).slice(0, 6);
+      out.push('【用户要求查看已应用样式 · CSS 摘录】\n全局 CSS：' + String(globalCss || '').slice(0, 3000) + '\n' +
+        source.map(function(c) {
+          var dl = c.dramaLook || {};
+          return (c.charAlias || c.charName) + '：聊天 CSS ' + String(c.customCss || '').slice(0, 2000) +
+            '；剧情格式 ' + ((dl.look || {}).format || 'bubble') + '；剧情 CSS ' + String(dl.customCss || '').slice(0, 2000) +
+            '；状态栏 ' + JSON.stringify(statusLookFor(c, false)).slice(0, 2500);
+        }).join('\n'));
+    }
+    var draftContext = assistantDraftContext(history || []);
+    if (draftContext) out.push(draftContext);
+    out.push('【美化续改】用户让你继续改时，使用同角色、同窗口的最新草稿，即使卡片还没应用。使用 revise_look 的 base 指定原草稿，patch 只提交本次点名的非 CSS 字段。CSS 续改用 cssEdits，每项 find 必须是草稿中唯一出现的原文，replace 是替换内容；明确加新规则时可用 appendCss。字段省略时原样保留。当前样式摘录只在用户主动要求查看时给出，仅在用户明确要求改用现用版本时以它另开草稿。新的目标可以直接用 set_css 或 set_status；续改找不到对应草稿就先确认，不把现用样式当成草稿。');
     out.push('【权限 · 状态栏】你可以直接改某个角色的状态栏（set_status，只写要改的那几项）：on（开 / 关）、rules（生成规则：要角色每次写什么、按什么格式）、find（匹配正则，认出回复里那段状态栏，括号里的是 $1、$2）、tpl（美化 HTML，用 $1、$2 填内容，可以带 <style>）、css（卡片 CSS：卡片画在 Shadow DOM 里，这里的 CSS 只管卡片自己，可以用 :host 改卡片外框，也能直接写模板里的类名改里面的样子）。' +
-      '想要的只是换个样子，就只改 tpl 或 css；改了格式（字段、标签）要 rules、find、tpl 三样一起对上。字体默认跟着小手机，模板里写 Microsoft YaHei、Arial 这类通用字体会被忽略，要特别的字体就写它的名字（需要的话用 @import 引入）。卡片用固定样例画效果图。\n' +
-      '现在的状态栏：\n' + (stLines.join('\n') || '（还没有角色开着状态栏）'));
+      '想要的只是换个样子，就只改 tpl 或 css；改了格式（字段、标签）要 rules、find、tpl 三样一起对上。字体默认跟着小手机，模板里写 Microsoft YaHei、Arial 这类通用字体会被忽略，要特别的字体就写它的名字（需要的话用 @import 引入）。卡片用固定样例画效果图。');
     out.push('【权限 · 气泡】用户要改气泡时，set_css 只填点名的选项："bubbleTpl"（聊天窗口 plain / tail / jelly / line / glass / sticker / night / siya；剧情窗口 plain / siyad）、"bubblePreset"（0 蓝粉 / 1 紫灰 / 2 橙绿 / 3 白绿）、"bubbleOpacity"（0～100）、"bubbleEffect"（none / shadow-out / shadow-in / glow）、"showAvatar"（消息头像，true / false）。');
+    acts.push('<mphone-action>{"type":"revise_look","base":"草稿编号","patch":{"bubbleOpacity":80},"cssEdits":[{"find":"草稿中的唯一原文","replace":"新内容"}]}</mphone-action>（patch、cssEdits、appendCss 按此次改动选填）');
     acts.push('<mphone-action>{"type":"set_status","target":"角色名","css":"卡片 CSS"}</mphone-action>（示例：只改状态栏样式）');
     acts.push('<mphone-action>{"type":"set_css","target":"角色名","bubbleOpacity":80}</mphone-action>（示例：只改气泡透明度）');
     acts.push('<mphone-action>{"type":"set_css","target":"global","mode":"append","css":"仅限用户指定部件的规则"}</mphone-action>');
@@ -224,6 +233,125 @@ function assistantPrompt(char) {
   return out.join('\n\n');
 }
 
+
+var ASSISTANT_LOOK_FIELDS = {
+  set_css: ['css', 'mode', 'bubbleTpl', 'bubblePreset', 'bubbleOpacity', 'bubbleEffect', 'showAvatar', 'format', 'boxLayout', 'boxStyle', 'boxMeta', 'boxActs'],
+  set_status: ['on', 'rules', 'find', 'tpl', 'css']
+};
+
+function assistantLookRequest(history) {
+  var end = history.length;
+  var start = chatCurrentTurnStart(history);
+  return history.slice(start, end).filter(function(m) { return !m.recalled; }).map(function(m) { return m.content || ''; }).join('\n');
+}
+
+function assistantAskedForLiveStyle(request) {
+  if (request.indexOf('【美化 · 查看已应用样式】') >= 0) return true;
+  return request.split(/[。！？\n，]/).some(function(sentence) {
+    if (/(?:不要|不用|别|不需要|不必).{0,8}(?:看|按|读取|参考|基于|检查)/.test(sentence)) return false;
+    return /(?:看|检查|读取|对照|参考|基于|按).{0,12}(?:正在应用|正在用|已应用|当前窗口|当前使用|当前的样式|线上版本)|(?:这个|那个|当前|已应用的)窗口.{0,8}(?:看|检查)/.test(sentence);
+  });
+}
+
+function assistantDrafts(history) {
+  return history.map(function(m, idx) {
+    var a = m.action;
+    if (m.role !== 'assistant' || m.recalled || !a || !Object.prototype.hasOwnProperty.call(ASSISTANT_LOOK_FIELDS, a.type) || a.state === 'failed') return null;
+    return { id: a.draftId || 'old-' + (m.time || 0) + '-' + idx, action: a };
+  }).filter(Boolean);
+}
+
+function assistantDraftScope(a) {
+  var target = a.target && findCharByName(a.target);
+  return JSON.stringify([a.type, target ? target.id : (a.target || 'global'), a.type === 'set_css' && a.view === 'drama']);
+}
+
+function assistantLatestDrafts(history) {
+  var byScope = new Map();
+  assistantDrafts(history).reverse().forEach(function(entry) {
+    var scope = assistantDraftScope(entry.action);
+    if (!byScope.has(scope)) byScope.set(scope, entry);
+  });
+  return Array.from(byScope.values());
+}
+
+function assistantDraftData(a) {
+  var draft = { type: a.type, target: a.target, view: a.view };
+  ASSISTANT_LOOK_FIELDS[a.type].forEach(function(field) {
+    if (Object.prototype.hasOwnProperty.call(a, field)) draft[field] = a[field];
+  });
+  return draft;
+}
+
+function assistantDraftContext(history) {
+  var drafts = assistantLatestDrafts(history);
+  if (!drafts.length) return '';
+  var request = assistantLookRequest(history);
+  var recent = history.slice(-8).some(function(m) { return m.action && Object.prototype.hasOwnProperty.call(ASSISTANT_LOOK_FIELDS, m.action.type); });
+  var mentionsLook = /美化|草稿|接着改|继续改|上一(?:轮|稿|版)|气泡|状态栏|样式|布局|输入栏|〔操作卡片|预览|CSS/i.test(request);
+  if (!recent && !mentionsLook) return '';
+  var named = drafts.filter(function(entry) {
+    var target = entry.action.target;
+    var c = findCharByName(target);
+    return [target, c && c.charName, c && c.charAlias].some(function(name) { return name && request.indexOf(name) >= 0; });
+  });
+  var relevant = named.length ? named : drafts;
+  var lines = relevant.slice(0, 3).map(function(entry) {
+    var data = { base: entry.id, state: ACTION_STATE_TEXT[entry.action.state], draft: assistantDraftData(entry.action) };
+    return JSON.stringify(data);
+  });
+  return '【小梦自己的最新美化草稿 · 每个目标窗口一份】\n' + lines.join('\n');
+}
+
+function reviseAssistantLook(request, history) {
+  var entry = assistantLatestDrafts(history).find(function(draft) { return draft.id === request.base; });
+  if (!entry) throw new Error('找不到最新一稿，请按最新草稿重新提交。');
+  var a = assistantDraftData(entry.action);
+  var fields = ASSISTANT_LOOK_FIELDS[a.type];
+  var patch = request.patch || {};
+  if (Object.keys(patch).some(function(field) {
+    return fields.indexOf(field) < 0 || field === 'css' || field === 'mode';
+  })) throw new Error('续改只能修改原目标的样式字段。');
+  Object.assign(a, patch);
+  var edits = request.cssEdits || [];
+  if (!Array.isArray(edits)) throw new Error('CSS 修改需要逐项列出。');
+  edits.forEach(function(edit) {
+    var css = a.css || '';
+    if (!edit || typeof edit.find !== 'string' || !edit.find || typeof edit.replace !== 'string' ||
+        css.split(edit.find).length !== 2) throw new Error('CSS 原文没有唯一匹配，草稿保留原样。');
+    a.css = css.replace(edit.find, function() { return edit.replace; });
+  });
+  if (typeof request.appendCss === 'string' && request.appendCss.trim()) {
+    a.css = (a.css ? a.css + '\n' : '') + request.appendCss;
+  }
+  if (JSON.stringify(assistantDraftData(a)) === JSON.stringify(assistantDraftData(entry.action))) throw new Error('这一稿没有修改内容。');
+  a.draftAncestors = (entry.action.draftAncestors || []).concat(entry.id);
+  return a;
+}
+
+function assistantChatDrafts() {
+  var char = assistantChar();
+  return char ? assistantDrafts(chatHistories[char.id] || []) : [];
+}
+
+function assistantDraftDescendant(a, appliedOnly) {
+  var drafts = assistantChatDrafts();
+  var current = drafts.find(function(entry) { return entry.action === a; });
+  return !!current && drafts.some(function(entry) {
+    var later = entry.action;
+    return (!appliedOnly || later.state === 'done') && (later.draftAncestors || []).indexOf(current.id) >= 0;
+  });
+}
+
+function assistantAppliedCssDraft(a) {
+  if (!a.draftAncestors || !a.draftAncestors.length) return null;
+  return assistantChatDrafts().reverse().map(function(entry) {
+    var old = entry.action;
+    return a.draftAncestors.indexOf(entry.id) >= 0 && old.state === 'done' &&
+      typeof old.css === 'string' && old.result && typeof old.result.prev === 'string' ? old : null;
+  }).find(Boolean) || null;
+}
+
 // ---------- 从回复里取出操作块 ----------
 function charOfHistory(hist) {
   return charList.filter(function(c) { return chatHistories[c.id] === hist || dramaHistories[c.id] === hist; })[0] || null;
@@ -233,7 +361,18 @@ function extractAssistantActions(hist, raw, out) {
   return raw.replace(/<mphone-action>([\s\S]*?)<\/mphone-action>/g, function(_, body) {
     var a = null;
     try { a = JSON.parse(body.trim().replace(/^```(?:json)?\s*|\s*```$/g, '')); } catch (_) {}
-    if (!a || ASSISTANT_ACTION_TYPES.indexOf(a.type) < 0) a = { type: 'invalid', raw: body.trim().slice(0, 200) };
+    if (a && a.type !== 'revise_look') delete a.draftAncestors;
+    if (a && a.type === 'revise_look') {
+      try { a = reviseAssistantLook(a, hist); }
+      catch (err) { a = { type: 'invalid', raw: err.message }; }
+    }
+    if (!a || (a.type !== 'invalid' && ASSISTANT_ACTION_TYPES.indexOf(a.type) < 0)) a = { type: 'invalid', raw: body.trim().slice(0, 200) };
+    if (Object.prototype.hasOwnProperty.call(ASSISTANT_LOOK_FIELDS, a.type)) {
+      var ancestors = Array.isArray(a.draftAncestors) ? a.draftAncestors : undefined;
+      a = assistantDraftData(a);
+      if (ancestors) a.draftAncestors = ancestors;
+      a.draftId = crypto.randomUUID ? crypto.randomUUID() : Array.from(crypto.getRandomValues(new Uint32Array(4))).join('-');
+    }
     a.state = a.type === 'invalid' ? 'failed' : 'pending';
     out.push(a);
     return '';
@@ -293,11 +432,18 @@ function statusLookPatch(a) {
   return o;
 }
 
-function assistantCssPatch(previous, action) {
+function assistantCssPatch(previous, action, result) {
   if (typeof action.css !== 'string') return previous;
-  if (action.mode === 'replace') return action.css;
-  if (!action.css.trim()) return previous;
-  return (previous ? previous + '\n' : '') + action.css;
+  var applied = assistantAppliedCssDraft(action);
+  var prefix = action.mode === 'replace' || !previous ? '' : previous + '\n';
+  if (applied) {
+    prefix = typeof applied.result.draftPrefix === 'string' ? applied.result.draftPrefix :
+      applied.mode === 'replace' || !applied.result.prev ? '' : applied.result.prev + '\n';
+    if ((previous || '') !== prefix + applied.css) throw new Error('已应用的样式后来有变动，请先检查窗口再继续。');
+  }
+  if (!applied && action.mode !== 'replace' && !action.css.trim()) return previous;
+  if (result) result.draftPrefix = prefix;
+  return prefix + action.css;
 }
 
 function replacesAssistantCss(a) {
@@ -369,7 +515,7 @@ function runAction(a) {
   } else if (a.type === 'set_css') {
     if (!a.target || a.target === 'global') {
       a.result = { prev: globalCss };
-      setGlobalCss(assistantCssPatch(globalCss, a));
+      setGlobalCss(assistantCssPatch(globalCss, a, a.result));
     } else {
       var c = findCharByName(a.target);
       if (!c) throw new Error('找不到角色「' + a.target + '」');
@@ -378,7 +524,7 @@ function runAction(a) {
         if (!c.dramaLook) { c.dramaLook = JSON.parse(JSON.stringify(viewLookPart(c, true))); delete c.dramaLook._borrowed; }   // 不带聊天窗口的 CSS
         var dl = c.dramaLook;
         a.result = { charId: c.id, view: 'drama', prev: dl.customCss || '', prevFormat: (dl.look || {}).format };
-        if (typeof a.css === 'string') dl.customCss = assistantCssPatch(dl.customCss, a);
+        if (typeof a.css === 'string') dl.customCss = assistantCssPatch(dl.customCss, a, a.result);
         a.result.prevLook = JSON.parse(JSON.stringify(dl.look || {}));
         a.result.prevBubble = JSON.parse(JSON.stringify(dl.bubble || {}));
         dl.look = Object.assign({}, dl.look || {}, dramaLookPatch(a), typeof a.showAvatar === 'boolean' ? { showAvatar: a.showAvatar } : {});
@@ -386,7 +532,7 @@ function runAction(a) {
         if (Object.keys(dramaBubble).length) dl.bubble = Object.assign({}, DEFAULT_BUBBLE, dl.bubble || {}, dramaBubble);
       } else {
         a.result = { charId: c.id, prev: c.customCss || '', prevBubble: JSON.parse(JSON.stringify(c.bubble || {})), prevChatLook: JSON.parse(JSON.stringify(c.look || {})) };
-        if (typeof a.css === 'string') c.customCss = assistantCssPatch(c.customCss, a);
+        if (typeof a.css === 'string') c.customCss = assistantCssPatch(c.customCss, a, a.result);
         var chatBubble = bubblePatch(a, false);
         if (Object.keys(chatBubble).length) c.bubble = Object.assign({}, DEFAULT_BUBBLE, c.bubble || {}, chatBubble);
         if (typeof a.showAvatar === 'boolean') c.look = Object.assign({}, c.look || {}, { showAvatar: a.showAvatar });
@@ -567,11 +713,17 @@ function paintActionCard(card, m) {
     paintActionCard(card, m);
     if (toast) showToast(toast, 'success');
   }
-  if (a.state === 'done') {
-    btn('撤销', 'ghost', function() { undoAction(a); done('undone', '已撤销'); });
-  } else if (a.type !== 'invalid' && allowed) {
+  if (a.state === 'done' && !assistantDraftDescendant(a, true)) {
+    btn('撤销', 'ghost', function() {
+      if (assistantDraftDescendant(a, true)) { showToast('请先撤销已应用的新版草稿', 'error'); return; }
+      undoAction(a); done('undone', '已撤销');
+    });
+  } else if (a.state !== 'done' && a.type !== 'invalid' && allowed) {
     var confirmNow = function() {
-      try { runAction(a); delete a.error; done('done', '✓ ' + actionTitle(a)); }
+      try {
+        if (assistantDraftDescendant(a, false)) throw new Error('已有更新的草稿，请应用最新一稿。');
+        runAction(a); delete a.error; done('done', '✓ ' + actionTitle(a));
+      }
       catch (err) { a.error = err.message; showToast('✗ ' + err.message, 'error'); paintActionCard(card, m); }
     };
     if (a.state === 'pending') btn('忽略', 'ghost', function() { done('ignored'); });
@@ -594,18 +746,128 @@ var MIANIN_INTRO =
   '你可以问我功能在哪、怎么用，或者把报错文字发给我一起看。我也能帮你写人设、整理世界书、设计聊天界面。开启相应权限后，我可以读取近期接口报错，也可以提交世界书或美化修改，由你确认后生效。\n\n' +
   '我看不到你和其他角色的聊天，也不能替你操作小手机、恢复备份或自行打开网页。你可以用「＋ → 文件」把想让我看的资料发给我。排查报错时，发提示文字就好，API Key 不用发。';
 
-function addAssistantIntroOnce() {
-  var char = assistantChar();
-  if (!char || !char.id || mphoneStore.load('mphone_mianin_intro_v1', false)) return;
+function seedMianinIntro(char) {
+  if (!isAssistantOn(char)) return;
   var history = getChatHistory(charList.indexOf(char));
-  if (!history.some(function(message) { return message.role === 'assistant' && message.content === MIANIN_INTRO; })) {
-    var firstTime = history[0] && history[0].time;
-    history.unshift({ role: 'assistant', content: MIANIN_INTRO, time: firstTime > 1 ? firstTime - 1 : Date.now() });
+  var first = history[0], next = history[1];
+  // v181 将开场时间回填成旧首条消息前一毫秒；只移除能确认是补入旧聊天的开场。
+  if (first && next && next.time > 1 && first.time === next.time - 1 &&
+      first.role === 'assistant' && first.content === MIANIN_INTRO) {
+    history.shift();
+    saveHistories();
+  }
+  if (mphoneStore.load('mphone_mianin_intro_v1', false)) return;
+  if (!history.length) {
+    history.push({ role: 'assistant', content: MIANIN_INTRO, time: Date.now() });
     saveHistories();
   }
   mphoneStore.save('mphone_mianin_intro_v1', true);
 }
-addAssistantIntroOnce();
+
+// 快捷工作栏的指引在本地显示，任务标签随聊天正文发送。
+var mianinWorkTools = {
+  '指南': {
+    notes: [
+      '功能怎么开、在哪找，可以直接在这里问小梦。',
+      '小梦右上角齿轮 → 内置助手，可以开关世界书、美化和报错读取。修改会以操作卡提交，由你确认。'
+    ]
+  },
+  '问题': {
+    notes: [
+      '接口报错时，发「查看详情」里的提示，以及出错时做的操作。API Key 可以遮掉。',
+      '想找搬家导入的聊天档案？打开对应角色的设置 → 扩展 → 其他小手机的记录。'
+    ]
+  },
+  '文件': {
+    notes: ['可以分析资料、修改已发送的文件，或制作可保存的文件。需要给小梦看原件时，用聊天的「＋ → 文件」。'],
+    tags: ['分析文件', '修改文件', '制作文件']
+  },
+  '美化': {
+    notes: ['先选要改的区域，再写角色、窗口和具体改法。续改会沿用小梦上一稿，也可以请她查看已应用的样式。'],
+    tags: ['聊天气泡', '剧情布局', '状态栏', '输入栏', '查看已应用样式']
+  }
+};
+var mianinWorkbar = document.getElementById('mianinWorkbar');
+var mianinWorkPanel = document.getElementById('mianinWorkPanel');
+var mianinWorkTag = document.getElementById('mianinWorkTag');
+var mianinWorkSection = '';
+var mianinPendingTag = '';
+
+function showMianinWorkSection(section) {
+  mianinWorkSection = section;
+  mianinWorkPanel.textContent = '';
+  mianinWorkPanel.hidden = !section;
+  mianinWorkbar.querySelectorAll('[data-work-tool]').forEach(function(button) {
+    button.setAttribute('aria-expanded', String(button.dataset.workTool === section));
+  });
+  if (!section) return;
+  closeCrPlusPanel();
+  var tool = mianinWorkTools[section];
+  tool.notes.forEach(function(note) {
+    var line = document.createElement('p');
+    line.textContent = note;
+    mianinWorkPanel.appendChild(line);
+  });
+  if (!tool.tags) return;
+  var options = document.createElement('div');
+  options.className = 'mianin-work-options';
+  tool.tags.forEach(function(tag) {
+    var button = document.createElement('button');
+    button.type = 'button';
+    button.textContent = tag;
+    button.addEventListener('click', function() {
+      setMianinWorkTag(section + ' · ' + tag);
+      showMianinWorkSection('');
+      crInput.focus();
+    });
+    options.appendChild(button);
+  });
+  mianinWorkPanel.appendChild(options);
+}
+
+function setMianinWorkTag(tag) {
+  mianinPendingTag = tag;
+  mianinWorkTag.hidden = !tag;
+  mianinWorkTag.textContent = tag ? tag + ' ×' : '';
+  mianinWorkTag.setAttribute('aria-label', tag ? '移除标签 ' + tag : '');
+}
+
+function updateMianinWorkbar() {
+  var char = charList[openingChatCharIdx];
+  mianinWorkbar.hidden = !isAssistantOn(char);
+  showMianinWorkSection('');
+}
+
+function attachMianinWorkTag(text) {
+  if (!mianinPendingTag || !isAssistantOn(charList[openingChatCharIdx])) return text;
+  var taggedText = '【' + mianinPendingTag + '】\n' + text;
+  setMianinWorkTag('');
+  showMianinWorkSection('');
+  return taggedText;
+}
+
+function addMianinIntroGuide(message, bubble) {
+  if (!bubble || !isAssistantOn(charList[openingChatCharIdx]) ||
+      message.role !== 'assistant' || message.content !== MIANIN_INTRO) return;
+  var button = document.createElement('button');
+  button.type = 'button';
+  button.className = 'mianin-intro-guide';
+  button.textContent = '打开使用指南';
+  button.addEventListener('click', function() {
+    showMianinWorkSection('指南');
+    mianinWorkbar.querySelector('[data-work-tool="指南"]').focus();
+  });
+  bubble.appendChild(button);
+}
+
+mianinWorkbar.querySelectorAll('[data-work-tool]').forEach(function(button) {
+  button.addEventListener('click', function() {
+    var section = button.dataset.workTool;
+    showMianinWorkSection(mianinWorkSection === section ? '' : section);
+  });
+});
+mianinWorkTag.addEventListener('click', function() { setMianinWorkTag(''); });
+
 
 
 // 消息列表里「[操作] …」的预览要用到本文件的函数，加载完重画一次

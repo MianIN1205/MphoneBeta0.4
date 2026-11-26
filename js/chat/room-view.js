@@ -73,6 +73,7 @@ function switchChatRoomSubView(view) {
   }
   closeCrPlusPanel();
   if (typeof crDraftSwap === 'function') crDraftSwap();   // 输入框草稿、引用跟着窗口走
+  if (typeof updateMianinWorkbar === 'function') updateMianinWorkbar();
   if (typeof syncGenBtn === 'function') syncGenBtn();     // ❄️ / ⏹ 看这个窗口自己在不在生成
   if (typeof renderQuickBar === 'function') renderQuickBar();
   if (typeof applyChatRoomStyle === 'function' && charList[openingChatCharIdx]) applyChatRoomStyle(charList[openingChatCharIdx]);

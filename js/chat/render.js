@@ -288,6 +288,7 @@ function renderHistMsgContent(m, list, empty) {
   crRowSpeaker = null;
   r.row._msg = m;
   r.row._extras = thinkBar ? [thinkBar] : [];
+  if (typeof addMianinIntroGuide === 'function') addMianinIntroGuide(m, r.bubble);
   if (toolLead) r.row._mcpNotes = [toolLead];
   // 群聊：换了一个人说话时，头像旁边写上名字（js/chat/group.js）
   if (role === 'ai' && m.speaker) {

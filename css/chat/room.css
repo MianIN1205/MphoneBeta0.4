@@ -370,3 +370,40 @@
   font-size: 12px; color: #5d4853;
 }
 .cr-plus-pin-choices input { accent-color: #b96585; }
+
+/* 小梦快捷工作栏 */
+#appChatRoom.no-drama:not(.is-group) .chat-room-bottom { flex-wrap: wrap; }
+.mianin-workbar { flex: 0 0 100%; order: -1; min-width: 0; }
+.mianin-workbar [hidden] { display: none; }
+.mianin-work-tabs, .mianin-work-options { display: flex; flex-wrap: wrap; gap: 6px; }
+.mianin-work-tabs { padding: 0 2px; }
+.mianin-work-tabs button, .mianin-work-options button, .mianin-work-tag, .mianin-intro-guide {
+  border: 1px solid #e9cdd4;
+  border-radius: 10px;
+  background: #fff6f7;
+  color: #89536a;
+  padding: 4px 9px;
+  min-height: 30px;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.mianin-work-tabs button { flex: 1 1 0; }
+.mianin-work-tabs button[aria-expanded="true"], .mianin-work-tag { background: #f3d8e0; }
+.mianin-work-panel {
+  margin: 0 2px 6px;
+  padding: 8px 10px;
+  max-height: 26vh;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  border: 1px solid #eddae0;
+  border-radius: 12px;
+  background: #fffafc;
+  color: #654e5a;
+  font-size: 12px;
+  line-height: 1.5;
+}
+.mianin-work-panel p { margin: 0; }
+.mianin-work-panel p + p, .mianin-work-options { margin-top: 6px; }
+.mianin-work-tag, .mianin-intro-guide { display: block; margin-top: 6px; }
