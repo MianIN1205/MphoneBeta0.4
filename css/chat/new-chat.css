@@ -15,9 +15,13 @@
   background: rgba(255,248,252,0.97);
   border-radius: 22px; padding: 20px 18px 16px;
   width: 290px;
+  max-width: calc(100% - 32px);
+  max-height: calc(100% - 76px);
   box-shadow: 0 10px 36px rgba(0,0,0,0.20);
   display: flex; flex-direction: column; gap: 14px;
 }
+
+.new-chat-modal-title, .new-chat-action-row { flex-shrink: 0; }
 
 .new-chat-modal-title {
   font-size: 15px; font-weight: 600; color: #222;
@@ -27,9 +31,21 @@
 .new-chat-list {
   display: flex; flex-direction: column; gap: 8px;
   padding: 4px 4px;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior-y: contain;
+}
+
+.new-chat-list::-webkit-scrollbar { width: 2px; }
+.new-chat-list::-webkit-scrollbar-track { background: transparent; }
+.new-chat-list::-webkit-scrollbar-thumb { background: rgba(164, 102, 131, 0.25); border-radius: 2px; }
+
+@supports not selector(::-webkit-scrollbar) {
+  .new-chat-list { scrollbar-width: thin; scrollbar-color: rgba(164, 102, 131, 0.25) transparent; }
 }
 
 .new-chat-char-item {
+  flex-shrink: 0;
   display: flex; align-items: center; gap: 12px;
   background: rgba(255,255,255,0.88);
   border-radius: 14px; padding: 10px 13px;

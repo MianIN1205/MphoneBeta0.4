@@ -57,6 +57,7 @@ function openNewChatModal() {
     newChatList.appendChild(item);
   });
   newChatOverlay.classList.add('open');
+  newChatList.scrollTop = 0;
 }
 
 function closeNewChatModal() {
