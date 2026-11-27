@@ -457,7 +457,7 @@
   border: none; background: none; color: #c08aa0; font-size: 11px;
   padding: 2px 4px; cursor: pointer; font-family: inherit;
 }
-.wb-folder-body { display: none; padding: 8px 0 0 10px; }
+.wb-folder-body { display: none; padding: 0; }
 .wb-folder.open .wb-folder-body { display: block; }
 
 /* 关联世界书：聊天窗口 / 剧情窗口两栏 */

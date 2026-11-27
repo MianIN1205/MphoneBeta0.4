@@ -167,6 +167,7 @@ function apiPresetSummary(preset) {
   if (preset.mealDirect && preset.mealDirectLimit) {
     var usage = typeof mealDirectGetUsage === 'function' ? mealDirectGetUsage(preset) : null;
     if (usage) base += ' · 已用 ' + usage.used + '/' + usage.limit + ' 次';
+    if (typeof mealDirectExpiryPhrase === 'function') base += ' · ' + mealDirectExpiryPhrase(preset.mealDirectExpires);
   }
   return base;
 }
@@ -310,6 +311,7 @@ apiPresetUpdate.addEventListener('click', function() {
   if (!cfg.mealDirectId && preset.mealDirectId) {
     delete preset.mealDirectId;
     delete preset.mealDirectLimit;
+    delete preset.mealDirectExpires;
     delete preset.mealDirect;
   }
   saveApiPresets(index);

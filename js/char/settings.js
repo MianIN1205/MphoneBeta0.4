@@ -892,7 +892,7 @@ function renderCharWbLinks(ids, folderIds) {
     label.appendChild(name);
     var count = document.createElement('span');
     count.className = 'wb-folder-count';
-    count.textContent = g.entries.length + ' 条';
+    count.textContent = g.entries.filter(function(e) { return !e.system; }).length + ' 条';
     var expand = document.createElement('button');
     expand.className = 'wb-link-expand';
     expand.innerHTML = FOLDER_ARROW;
@@ -905,6 +905,7 @@ function renderCharWbLinks(ids, folderIds) {
     var list = document.createElement('div');
     list.className = 'wb-link-folder-entries';
     g.entries.forEach(function(entry) {
+      if (entry.system) return;
       var el = document.createElement('label');
       el.className = 'wb-link-item';
       var cb = document.createElement('input');

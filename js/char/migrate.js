@@ -96,7 +96,7 @@ function migPickFromBackup(file) {
   return migScan(file).then(function(r) {
     if (!r.chars.length) throw new Error('备份里没有角色');
     migState = { file: file, chars: r.chars, books: r.books, pick: r.chars.filter(function(c) { return c.count; }).sort(function(a, b) { return b.count - a.count; })[0] || r.chars[0] };
-    document.getElementById('migFrom').value = 'uwu 小手机';
+    document.getElementById('migFrom').value = '其他小手机';
     migRender();
     migOverlay.classList.add('open');
     return new Promise(function(res) { migResolve = res; });
@@ -180,7 +180,7 @@ document.getElementById('migOk').addEventListener('click', function() {
       return e;
     }) };
   }
-  var from = document.getElementById('migFrom').value.trim().replace(/^来自\s*/, '') || 'uwu 小手机';
+  var from = document.getElementById('migFrom').value.trim().replace(/^来自\s*/, '') || '其他小手机';
   if (!(document.getElementById('migHistory').checked && c.count > 0)) { migClose(draft); return; }
   // 聊天记录：第二遍读出来，跟着草稿走，保存角色时存成档案
   btn.disabled = true; btn.textContent = '正在读聊天记录…';

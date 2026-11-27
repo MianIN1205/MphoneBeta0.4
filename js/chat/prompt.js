@@ -65,6 +65,7 @@ function chatFormatRules(char) {
   if (c.patOn) {
     rules.push('你也可以像微信一样拍一拍用户：想拍的时候在全部消息最后另起一行写 <拍一拍/>（偶尔用，不要每次都拍）。用户拍你时，记录里会出现「（用户拍了拍你…）」。');
   }
+  rules.push('想玩的时候可以夹在聊天里：单独一行写 <骰子/> 或 <猜拳/>，小手机会随机出结果。按自己的性子来，不是每次都玩。不要自己写掷出几点，也不要写自己出了石头、剪刀或布。');
   // 待关心、补人设、防复读（js/char/life.js）
   if (typeof lifeFormatRules === 'function') lifeFormatRules(char).forEach(function(r) { rules.push(r); });
   // 帮{{user}}记现实里的东西（js/chat/assets.js）
@@ -161,6 +162,7 @@ function fillMacros(text, char) {
 
 // 剧情回复的格式要求：最后写一句隐藏的前情。聊天窗口靠它知道剧情空间发生了什么，剧情太长时也用它代替省略的原文
 function dramaFormatRules(char) {
+  if (char && char.isGroup && typeof groupDramaRules === 'function') return groupDramaRules(char);   // 群剧情：一幕写完，不按「名字：」拆
   var illus = (typeof imgUse === 'function' && imgUse('drama') === 'gen')
     ? '再另起一行写 <配图>用一两句话描述这一幕的画面（人物外貌和动作、场景、光线、氛围），会照着它画一张配图</配图>，这一行也不会显示出来。' : '';
   var st = statusRulesFor(char, true);   // 开了「剧情窗口也写状态栏」才有
@@ -213,7 +215,13 @@ function crossSceneContext(idx, isDrama) {
     var t = String(msgTextForAI(m)).replace(/\s+/g, ' ').trim();
     if (!t) return '';
     if (t.length > 150) t = t.slice(0, 150) + '…';
-    return (m.role === 'user' ? userName : charName) + '：' + t;
+    var whoName = charName;
+    if (char.isGroup && m.narr) whoName = '旁白';
+    else if (char.isGroup && m.role !== 'user' && m.speaker && typeof groupLabel === 'function') {
+      var sp = charList[findCharIdx(m.speaker)];
+      if (sp) whoName = groupLabel(sp);
+    } else if (char.isGroup && m.role !== 'user' && !m.speaker) whoName = '这一幕';
+    return (m.role === 'user' && !(char.isGroup && m.narr) ? userName : whoName) + '：' + t;
   };
   var lines = [];
   if (isDrama) {
@@ -501,7 +509,17 @@ function buildMsgs(idx, histOverride, historySession, preview) {
 
   // ── buildMsgs 第三段：记忆库 ──
   var memSys = (typeof memoryContextFor === 'function') ? memoryContextFor(char, history) : '';
-  if (memSys) msgs.push({ role: 'system', content: memSys });
+  if (memSys) {
+    var memMsg = { role: 'system', content: memSys };
+    if (preview && typeof memoryReadNote === 'function') {
+      var memNote = memoryReadNote(char, history);
+      if (memNote) {
+        memMsg.previewNote = memNote;
+        if (memSys.indexOf('【你的记忆】') >= 0) memMsg.previewLabel = '这次读到的记忆';
+      }
+    }
+    msgs.push(memMsg);
+  }
   if (isChatHist && (preview || historySession)) {
     var memoryConfig = memCfgOf(char);
     var dailyRecall = memoryConfig.on && memoryConfig.read && !recalledText ? memDayRecall(char, fullHistory, history) : '';
@@ -605,7 +623,7 @@ function buildMsgs(idx, histOverride, historySession, preview) {
   if (preview) {
     function section(parts, zone) {
       return parts.map(function(part) {
-        return Object.assign({}, zone === 'history' || part === fileSys ? part : fill(part), { previewZone: zone, previewLabel: part.previewLabel });
+        return Object.assign({}, zone === 'history' || part === fileSys ? part : fill(part), { previewZone: zone, previewLabel: part.previewLabel }, part.previewNote ? { previewNote: part.previewNote } : {});
       });
     }
     return section(msgs.concat(fileSys ? [fileSys] : []), 'before').concat(
@@ -627,6 +645,7 @@ function msgTextForAI(m) {
   if (m.action && typeof actionTextForAI === 'function') return actionTextForAI(m.action);
   if (m.cal && typeof calTextForAI === 'function') return calTextForAI(m.cal);
   if (m.play && typeof playTextForAI === 'function') return playTextForAI(m);
+  if (m.game && typeof gameTextForAI === 'function') return gameTextForAI(m);
   if (m.whisperChat && typeof whisperTextForAI === 'function') return whisperTextForAI(m);   // 群里的悄悄话   // 群里的投票 / 抽奖 / 红包
   var c = (m.file && typeof fileTextForAI === 'function') ? fileTextForAI(m)
         : m.textImg ? (m.illus ? '（这一幕的配图）' : m.role === 'assistant' ? '[你发了一张照片：' + m.textImg + ']' : '[发来一张照片（用文字描述的画面）：' + m.textImg + ']')

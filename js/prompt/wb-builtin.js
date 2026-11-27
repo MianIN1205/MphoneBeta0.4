@@ -146,12 +146,14 @@ var WB_BUILTIN = [
 })();
 
 // =============================================
-// 系统世界书 · 禁词库（system: true）
-// 只能改内容和开关，不能删、不能改位置/类型。
-// 注入位置固定在回复格式之前（buildMsgs 里用 getSystemWbEntries 取出）。
+// 系统级全局禁词库（system: true）
+// 放在「禁词」文件夹里，和别的禁词在一起。删不掉，不能改名字、位置、类型，也不能拖到别的文件夹。
+// 内容可以改。不在列表里开关，也不进拓展栏：不关联角色也生效（buildMsgs 里用 getSystemWbEntries 取出）。
+// 同文件夹里其他条目、新建的条目都是普通的。
 // =============================================
-var WB_SYSTEM_FOLDER_ID = 'wf-system';
-var WB_SYSTEM_FOLDER_NAME = '系统';
+var WB_SYSTEM_FOLDER_ID = 'wf-system';   // 旧的「系统」文件夹，搬完就删掉
+var WB_SYSTEM_BANNED_ID = 'wb-sys-banned';
+var WB_SYSTEM_BANNED_NAME = '系统级全局禁词库';
 
 // 默认禁词内容（从系统提示词里移过来的反例 + 油腻词）
 var WB_SYSTEM_BANNED_DEFAULT =
@@ -160,38 +162,81 @@ var WB_SYSTEM_BANNED_DEFAULT =
   '不说油腻、霸总式的话（比如「小家伙」「丫头」「谁给你的胆子」），不居高临下地管教或审视对方。\n' +
   '人设本来就这样说话的除外。';
 
-var WB_SYSTEM_ENTRIES = [
-  {
-    id: 'wb-sys-banned',
-    name: '禁词库',
-    content: WB_SYSTEM_BANNED_DEFAULT,
-    system: true,     // 系统条目：不可删、不可改位置/类型
-    rule: true,       // 写法要求
-    pos: 'before'     // 位置固定（代码里单独注入，不看这个值）
+// 「禁词」文件夹：已经有就用原来的（改过名字也认），没有才新建
+function wbBannedFolder() {
+  var entry = wbEntries.filter(function(e) { return e.id === WB_SYSTEM_BANNED_ID; })[0];
+  if (entry && entry.folderId && entry.folderId !== WB_SYSTEM_FOLDER_ID) {
+    var cur = wbFolders.filter(function(f) { return f.id === entry.folderId; })[0];
+    if (cur) return cur;
   }
-];
+  var named = wbFolders.filter(function(f) { return f.name === '禁词'; })[0];
+  if (named) return named;
+  var f = { id: 'wf-banned', name: '禁词' };
+  wbFolders.push(f);
+  return f;
+}
 
-// 确保系统文件夹和条目存在（只建一次，之后用户改了内容就保留用户的版本）
 (function() {
-  if (!wbFolders.some(function(f) { return f.id === WB_SYSTEM_FOLDER_ID; })) {
-    wbFolders.unshift({ id: WB_SYSTEM_FOLDER_ID, name: WB_SYSTEM_FOLDER_NAME });
-  }
+  var folder = wbBannedFolder();
   var changed = false;
-  WB_SYSTEM_ENTRIES.forEach(function(def) {
-    var exist = wbEntries.find(function(e) { return e.id === def.id; });
-    if (exist) {
-      // 确保 system 标记在（防止旧数据丢标记）
-      if (!exist.system) { exist.system = true; changed = true; }
-      return;
-    }
-    wbEntries.unshift({ id: def.id, name: def.name, keywords: '', content: def.content,
-      pos: def.pos, folderId: WB_SYSTEM_FOLDER_ID, rule: true, system: true, enabled: true });
+  var exist = wbEntries.filter(function(e) { return e.id === WB_SYSTEM_BANNED_ID; })[0];
+  if (!exist) {
+    wbEntries.unshift({ id: WB_SYSTEM_BANNED_ID, name: WB_SYSTEM_BANNED_NAME, keywords: '', content: WB_SYSTEM_BANNED_DEFAULT,
+      pos: 'before', folderId: folder.id, kind: 'rule', system: true, enabled: true });
     changed = true;
-  });
+  } else {
+    if (exist.name !== WB_SYSTEM_BANNED_NAME) { exist.name = WB_SYSTEM_BANNED_NAME; changed = true; }
+    if (!exist.system) { exist.system = true; changed = true; }
+    if (exist.folderId !== folder.id) { exist.folderId = folder.id; changed = true; }
+    if (!exist.kind) { exist.kind = 'rule'; changed = true; }
+  }
+  var left = wbEntries.some(function(e) { return e.folderId === WB_SYSTEM_FOLDER_ID && e.id !== WB_SYSTEM_BANNED_ID; });
+  if (!left) {
+    var before = wbFolders.length;
+    wbFolders = wbFolders.filter(function(f) { return f.id !== WB_SYSTEM_FOLDER_ID; });
+    if (wbFolders.length !== before) changed = true;
+  }
   if (changed) saveWbEntries();
+  if (typeof renderWbList === 'function') renderWbList();
 })();
 
-// 取出所有启用的系统世界书条目（buildMsgs 用）
+// 系统级条目一直带着（buildMsgs 用），这一页和拓展栏都不负责关它
 function getSystemWbEntries() {
-  return wbEntries.filter(function(e) { return e.system && e.enabled !== false && e.content; });
+  return wbEntries.filter(function(e) { return e.system && e.content; });
 }
+
+// =============================================
+// 自带的「群聊」世界书：单独一个分类，新建群聊时已经关联上。
+// 放进去以后就是普通条目，能改能删。只写一次，不覆盖后来改过的。
+// =============================================
+var WB_GROUP_FOLDER_ID = 'wf-group';
+var WB_GROUP_ENTRIES = [
+  {
+    id: 'wb-grp-roles',
+    name: '角色怎么分开',
+    content: '群里的人已经各有人设。先按人设把他们分成不同的位置，一轮里各做各的，不要写成同一种人。\n· 话多的可以多说一两句，话少的常常只接半句，或者这轮不说话。\n· 会照顾场面的人接住冷场，爱逗的人只逗一句，直的人把话说直。\n· 同一种反应不要两个人一起做。有人已经接住了，另一个人换个角度，或者不接。\n· 头衔和群昵称只是称呼，不改这个人本来的性格。\n· 正在被禁言的人，这轮不要写他说话。'
+  },
+  {
+    id: 'wb-grp-pace',
+    name: '群里的节奏',
+    content: '这是一群人在说话，不是轮流自我介绍。\n· 一轮里通常两三个人开口就够，不必每个人都发言。\n· 先接{{user}}刚刚说的那一件事。有人接住了，别人可以补一句、岔开，或者不说话。\n· 不要连着问{{user}}。一轮里问句最多一个。\n· 短就短。一个字、一个表情、一句没说完，都算一条。\n· 不要把同一个人刚说过的意思再说一遍。\n· 剧情窗口里这几个人在同一幕，仍然各说各的话，不要合成一种腔调。'
+  },
+  {
+    id: 'wb-grp-talk',
+    name: '彼此怎么接话',
+    content: '群友是在互相说话，不只是排队回复{{user}}。\n· 可以接别人刚说的、帮一句腔、轻轻拆台。点到为止。人设本来就会呛的，才往下呛。\n· {{user}}这会儿没说话，也可以两个人把刚才的话题再碰一下，然后停。\n· 不要所有人都来安慰，都来附和，都来问还好吗。\n· 跟谁说，就把那个名字放进这句话里，让人看得出是在跟谁说。\n· 不替{{user}}说话，也不替没开口的那个人决定心情。'
+  }
+];
+(function() {
+  if (Number(mphoneStore.load('mphone_wb_group_seed', 0)) >= 1) return;
+  if (!wbFolders.some(function(f) { return f.id === WB_GROUP_FOLDER_ID; })) {
+    wbFolders.push({ id: WB_GROUP_FOLDER_ID, name: '群聊' });
+  }
+  WB_GROUP_ENTRIES.forEach(function(def) {
+    if (wbEntries.some(function(e) { return e.id === def.id; })) return;
+    wbEntries.push({ id: def.id, name: def.name, keywords: '', content: def.content, pos: 'after', folderId: WB_GROUP_FOLDER_ID, kind: 'rule', enabled: true });
+  });
+  saveWbEntries();
+  mphoneStore.save('mphone_wb_group_seed', 1);
+  if (typeof renderWbList === 'function') renderWbList();
+})();

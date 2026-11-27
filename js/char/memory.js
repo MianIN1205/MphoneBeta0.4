@@ -345,28 +345,64 @@ function memQueryOf(hist) {
   return (hist || []).slice(-4).map(function(m) { return msgTextForAI(m); }).join('\n');
 }
 
+// 这次会读进提示词的记忆（和下面发给 TA 的是同一份）
+function memChosen(char, hist) {
+  var cfg = memCfgOf(char);
+  if (!char || !char.id || !cfg.on || !cfg.read) return null;
+  var timeline = memTimeline(char.id).slice(-MEM_TL_MAX);
+  var precious = memList(char.id).filter(function(m) { return m.type === 'precious' && !m.tl; }).sort(function(a, b) { return a.time - b.time; }).slice(-12);
+  var moods = memMoodsOf((hist || []).slice(-4).filter(function(m) { return m.role === 'user'; }).map(function(m) { return typeof m.content === 'string' ? m.content : ''; }).join('\n'));
+  var rec = memRecall(char, memQueryOf(hist), cfg.topK, { skipPrecious: true, moods: moods });
+  var msText = (memMilestones[char.id] || {}).text || '', knowText = (memKnow[char.id] || {}).text || '';
+  if (cfg.budget > 0 && typeof estTokens === 'function') {
+    var cost = function() {
+      return estTokens(msText) + estTokens(knowText) + estTokens(timeline.map(function(m) { return m.text; }).join('\n')) + estTokens(precious.map(function(m) { return m.text; }).join('\n')) +
+        estTokens(rec.map(function(r) { return r.m.text; }).join('\n'));
+    };
+    while (rec.length && cost() > cfg.budget) rec.pop();
+    while (precious.length > 1 && cost() > cfg.budget) precious.shift();
+  }
+  return {
+    timeline: timeline, precious: precious, rec: rec, msText: msText, knowText: knowText,
+    youName: (typeof resolveCharAccount === 'function' && resolveCharAccount(char).nickname) || '用户'
+  };
+}
+// 预览里用的短说明：哪些每次都带着，哪些是这次才想起来的。不发给模型
+function memoryReadNote(char, hist) {
+  if (!char || !char.id || char.isGroup) return '';
+  var cfg = memCfgOf(char);
+  if (!cfg.on || !cfg.read) return '';
+  var pack = memChosen(char, hist);
+  if (!pack) return '';
+  var always = [];
+  if (pack.knowText) always.push('你知道的' + pack.youName);
+  if (pack.timeline.length) always.push('时间线 ' + pack.timeline.length + ' 条');
+  if (pack.msText) always.push('关系里的节点');
+  if (pack.precious.length) always.push('珍贵 ' + pack.precious.length + ' 条');
+  var lines = [always.length ? ('每次聊天都带着：' + always.join('、') + '。') : '没有每次都带着的记忆。'];
+  var asked = String(memQueryOf(hist) || '').trim();
+  if (!pack.rec.length) lines.push(asked ? '这次没有因为最近的话额外想起来的。' : '最近没有你的话，也没有额外带上的。');
+  else {
+    lines.push(asked ? ('这次因为最近几句，又想起来 ' + pack.rec.length + ' 条：') : ('最近没有你的话，就带上最近记下的 ' + pack.rec.length + ' 条：'));
+    pack.rec.forEach(function(r) {
+      var t = String(r.m.text || '').replace(/\s+/g, ' ').trim();
+      if (t.length > 22) t = t.slice(0, 22) + '…';
+      var why = !asked ? '最近记下的' : (r.cue ? '话里有「' + r.cue + '」' : '和最近说的对上了');
+      lines.push('· ' + t + '（' + memAgo(r.m.time) + '，' + why + '）');
+    });
+  }
+  return lines.join('\n');
+}
 // 发给角色的【记忆】：珍贵的全部 + 相关的几条 + 怎样记下新记忆
 function memoryContextFor(char, hist) {
   if (!char || !char.id) return '';
   var cfg = memCfgOf(char);
   if (!cfg.on) return '';
   var out = '';
-  if (cfg.read) {
-    var timeline = memTimeline(char.id).slice(-MEM_TL_MAX);
-    var precious = memList(char.id).filter(function(m) { return m.type === 'precious' && !m.tl; }).sort(function(a, b) { return a.time - b.time; }).slice(-12);
-    var moods = memMoodsOf((hist || []).slice(-4).filter(function(m) { return m.role === 'user'; }).map(function(m) { return typeof m.content === 'string' ? m.content : ''; }).join('\n'));
-    var rec = memRecall(char, memQueryOf(hist), cfg.topK, { skipPrecious: true, moods: moods });
-    // 关系里程碑一直带着；其余按「记忆最多占用」放：超出时先少想起几条相关的，再少放几条最早的珍贵回忆
-    var msText = (memMilestones[char.id] || {}).text || '', knowText = (memKnow[char.id] || {}).text || '';
-    if (cfg.budget > 0 && typeof estTokens === 'function') {
-      var cost = function() {
-        return estTokens(msText) + estTokens(knowText) + estTokens(timeline.map(function(m) { return m.text; }).join('\n')) + estTokens(precious.map(function(m) { return m.text; }).join('\n')) +
-          estTokens(rec.map(function(r) { return r.m.text; }).join('\n'));
-      };
-      while (rec.length && cost() > cfg.budget) rec.pop();
-      while (precious.length > 1 && cost() > cfg.budget) precious.shift();
-    }
-    var lines = [], youName = (typeof resolveCharAccount === 'function' && resolveCharAccount(char).nickname) || '用户';
+  var pack = cfg.read ? memChosen(char, hist) : null;
+  if (pack) {
+    var timeline = pack.timeline, precious = pack.precious, rec = pack.rec, msText = pack.msText, knowText = pack.knowText;
+    var lines = [], youName = pack.youName;
     if (knowText) lines.push('🌸 你知道的' + youName + '（熟悉的人不用回想就知道的事，自然地照顾到就好，不用提起）：\n' + knowText);
     if (timeline.length) lines.push('🕰 ' + youName + '的时间线（' + youName + '生活里长久的变化和重要节点，按时间排；后面的变化取代前面的说法，聊到相关的事时以最新的为准）：\n' +
       timeline.map(function(m) { return '· ' + (m.when ? memWhenText(m.when, m.whenPrecision) : '日期未标明') + '：' + m.text; }).join('\n'));

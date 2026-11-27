@@ -279,7 +279,8 @@ function renderHistMsgContent(m, list, empty) {
   }
   var role = m.role === 'user' ? 'user' : 'ai';
   crRowSpeaker = role === 'ai' ? m.speaker || null : null;
-  var r = m.privateCard ? appendPrivatePlusCard(role, m, list, empty) : (m.play && typeof appendPlayMsg === 'function') ? appendPlayMsg(role, m, list, empty)   // 群里的投票 / 抽奖 / 红包（js/chat/group-play.js）
+  var r = m.privateCard ? appendPrivatePlusCard(role, m, list, empty) : (m.game && typeof appendGameMsg === 'function') ? appendGameMsg(role, m, list, empty)
+        : (m.play && typeof appendPlayMsg === 'function') ? appendPlayMsg(role, m, list, empty)   // 群里的投票 / 抽奖 / 红包（js/chat/group-play.js）
         : (m.file && typeof appendFileMsg === 'function') ? appendFileMsg(role, m, list, empty)
         : (m.textImg && !m.imgSrc && typeof appendTextImgMsg === 'function') ? appendTextImgMsg(role, m, list, empty)
         : m.imgSrc ? appendImgMsg(role, m.imgSrc, list, empty, m.images)
@@ -298,7 +299,10 @@ function renderHistMsgContent(m, list, empty) {
       var spk = charList[findCharIdx(m.speaker)];
       var nameEl = document.createElement('div');
       nameEl.className = 'cr-speaker';
-      nameEl.textContent = spk ? (typeof groupNick === 'function' ? groupNick(charList[openingChatCharIdx], spk) : groupLabel(spk)) : '';   // 群里显示群昵称
+      var gNow = charList[openingChatCharIdx];
+      nameEl.textContent = spk ? (typeof groupNick === 'function' ? groupNick(gNow, spk) : groupLabel(spk)) : '';   // 群里显示群昵称
+      var honor = spk && gNow && gNow.isGroup && typeof groupHonor === 'function' ? groupHonor(gNow, spk) : '';
+      if (honor) { var tag = document.createElement('span'); tag.className = 'cr-honor'; tag.textContent = honor; nameEl.appendChild(tag); }
       list.insertBefore(nameEl, r.row);
       r.row._extras.push(nameEl);
     }
@@ -471,14 +475,31 @@ function switchAlt(m, dir) {
 
 // 拍一拍（聊天窗口，角色设置「聊天」页打开后生效）：双击头像拍一拍，中间出现一行小字；不自动请求回复，按 ❄️ 时角色就知道
 // m.pat：'char' = 你拍了拍角色，'self' = 你拍了拍自己，'user' = 角色拍了拍你；m.patSuffix = 拍的时候用的后缀
+function patPersonName(id) {
+  var g = charList[openingChatCharIdx], c = charList[findCharIdx(id)];
+  if (!c) return '有人';
+  return g && g.isGroup && typeof groupNick === 'function' ? groupNick(g, c) : (c.charAlias || c.charName || '对方');
+}
 function patNoticeText(m) {
-  var char = charList[openingChatCharIdx] || {}, name = char.charAlias || char.charName || '对方';
+  var char = charList[openingChatCharIdx] || {};
   if (m.pat === 'self') return '你拍了拍自己';
+  if (char.isGroup && m.patWho) {
+    var nick = patPersonName(m.patWho);
+    if (m.pat === 'user') return '「' + nick + '」拍了拍你';
+    return '你拍了拍「' + nick + '」' + (m.patSuffix || '');
+  }
+  var name = char.charAlias || char.charName || '对方';
   if (m.pat === 'user') return '「' + name + '」拍了拍你';
   return '你拍了拍「' + name + '」' + (m.patSuffix || '');
 }
 function patTextForAI(m) {
+  var char = charList[openingChatCharIdx] || {};
   if (m.pat === 'self') return '（用户拍了拍自己）';
+  if (char.isGroup && m.patWho) {
+    var nick = patPersonName(m.patWho);
+    if (m.pat === 'user') return '（' + nick + '拍了拍用户）';
+    return '（用户拍了拍' + nick + (m.patSuffix || '') + '）';
+  }
   if (m.pat === 'user') return '（你拍了拍用户）';
   return '（用户拍了拍你' + (m.patSuffix || '') + '）';
 }
@@ -542,10 +563,12 @@ document.getElementById('chatMsgList').addEventListener('click', function(e) {
   patLastTap = { el: null, time: 0 };
   var char = charList[openingChatCharIdx];
   var cfg = Object.assign({}, DEFAULT_CHAT_CFG, (char && char.chatCfg) || {});
-  if (!char || !cfg.patOn || char.isGroup) return;   // 群里不拍一拍
+  if (!char || !cfg.patOn) return;
   var row = av.closest('.chat-msg-row');
   var self = !!(row && row.classList.contains('user'));
-  var m = { role: 'user', content: '', pat: self ? 'self' : 'char', patSuffix: self ? '' : (cfg.patSuffix || ''), time: now };
+  var who = char.isGroup && !self && row && row._msg ? row._msg.speaker : '';
+  if (char.isGroup && !self && !who) return;
+  var m = { role: 'user', content: '', pat: self ? 'self' : 'char', patWho: who || '', patSuffix: self ? '' : (cfg.patSuffix || ''), time: now };
   getChatHistory(openingChatCharIdx).push(m);
   renderHistMsg(m, document.getElementById('chatMsgList'), document.getElementById('chatRoomEmpty'));
   saveHistories();

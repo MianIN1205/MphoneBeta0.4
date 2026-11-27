@@ -121,6 +121,39 @@ function promptPreviewMedia(message) {
   return null;
 }
 
+// 预览用的短标题。外壳「背景设定 / 写法要求」不算名字，用里面那一条的名字
+var PP_WRAP_HEAD = { '背景设定': 1, '写法要求': 1 };
+function ppHeads(text) {
+  var heads = [], re = /【([^】\n]{1,40})】/g, m, src = String(text || '').slice(0, 600);
+  while ((m = re.exec(src)) && heads.length < 4) heads.push(m[1].trim());
+  return heads;
+}
+function ppName(m, text) {
+  if (m.previewMedia && m.previewMedia.title) return m.previewMedia.title;
+  if (m.previewLabel) return m.previewLabel;
+  if (String(text || '').indexOf('需要发给对方可完整复制的长文本') === 0) return '长文本和文件';
+  var heads = ppHeads(text);
+  if (!heads.length) return m.role === 'user' ? '你' : '说明';
+  var topFull = heads[0], top = topFull.length <= 24 ? topFull : topFull.split(' · ')[0];
+  if (top.split(' · ')[0] === '眠花糖机') return '系统提示词';
+  if (PP_WRAP_HEAD[top.split(' · ')[0]] && heads[1]) {
+    var next = heads[1];
+    return next.length <= 24 ? next : next.split(' · ')[0];
+  }
+  return top;
+}
+function ppStripHead(name, text) {
+  var body = String(text || '').trim(), guard = 0;
+  while (name && guard++ < 3) {
+    var m = body.match(/^【([^】\n]+)】[ \t]*\n?/);
+    if (!m) break;
+    var h = m[1].split(' · ')[0];
+    if (h !== name && !PP_WRAP_HEAD[h] && m[1].indexOf(name) !== 0) break;
+    body = body.slice(m[0].length).trim();
+  }
+  return body;
+}
+function ppOneLine(s) { return String(s || '').replace(/\s+/g, ' ').trim(); }
 function renderPromptPreview(idx, char, drama) {
   var list = document.getElementById('promptPreviewList'), totalEl = document.getElementById('promptPreviewTotal'), msgs;
   list.replaceChildren();
@@ -131,7 +164,10 @@ function renderPromptPreview(idx, char, drama) {
   try {
     var format = [].concat(drama ? dramaFormatRules(char) : chatFormatRules(char), cotRules(drama, char));
     msgs = buildMsgs(idx, historySource, null, true)
-      .concat(format.map(function(m) { return Object.assign({}, m, { previewZone: 'after' }); }));
+      .concat(format.map(function(m) {
+        var raw = partsText(m.content);
+        return Object.assign({}, m, { previewZone: 'after', previewLabel: m.previewLabel || ppName(m, raw) });
+      }));
   } catch (e) { list.textContent = '无法预览提示词：' + e.message; return; }
   var caps = llmCaps(getApiCfg(char));
   var slots = { before: [], history: [], after: [] }, total = 0, historyCount = 0;
@@ -145,16 +181,40 @@ function renderPromptPreview(idx, char, drama) {
     }
     var tokens = estTokens(text);
     total += tokens;
-    if (m.previewZone === 'history' && m.promptDepth === undefined) historyCount++;
-    var heading = m.previewZone !== 'history' && text.match(/^【([^】\n]+)】/);
-    var detail = media ? media.detail : text;
-    var box = document.createElement(detail ? 'details' : 'div');
-    box.className = 'prompt-preview-item role-' + m.role;
-    var head = document.createElement(detail ? 'summary' : 'div');
+    var inHist = m.previewZone === 'history';
+    var insert = inHist && m.promptDepth !== undefined;
+    if (inHist && !insert) historyCount++;
+    var name = insert ? ('插在这里 · ' + (m.previewLabel || ppName(m, text))) : (inHist ? '' : ppName(m, text));
+    var shown = inHist && !insert ? text : ppStripHead(name, media && media.detail ? media.detail : text);
+    if (media && media.detail && !inHist) shown = media.detail;
+    var lines = String(shown || '').split('\n').map(function(s) { return s.trim(); }).filter(Boolean);
+    var one = ppOneLine(lines.join(' '));
+    var who = '';
+    if (inHist && !insert) {
+      if (m.role === 'user') who = '你';
+      else {
+        var nm = text.match(/^([^：:\n]{1,12})[：:]/);
+        who = nm ? nm[1] : 'TA';
+      }
+    }
+    if (!m.previewNote && text.indexOf('【记忆总结】') === 0) m.previewNote = '这是更早的聊天收成的一段总结，在记录前面读。不是按最近的话一条条想起来的。';
+    // 一行就能看完的，不再做成展开（展开里还是同一句）
+    var fold = !!(m.previewNote || insert || lines.length > 1 || one.length > 28 || (media && media.detail && media.detail !== one));
+    var box = document.createElement(fold ? 'details' : 'div');
+    box.className = 'prompt-preview-item role-' + m.role + (insert ? ' pp-insert' : '') + (fold ? '' : ' pp-line');
+    var head = document.createElement(fold ? 'summary' : 'div');
     head.className = 'pp-item-head';
+    if (who) {
+      var whoEl = document.createElement('span');
+      whoEl.className = 'pp-who';
+      whoEl.textContent = who;
+      head.append(whoEl);
+    }
+    var clip = lines[0] || one || '（空）';
+    if (inHist && !insert && who && who !== '你' && who !== 'TA') clip = clip.replace(new RegExp('^' + who.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '[：:]\\s*'), '');
     var title = document.createElement('span');
     title.className = 'pp-heads';
-    title.textContent = (media && media.title) || m.previewLabel || (heading && heading[1]) || text.replace(/\s+/g, ' ').trim();
+    title.textContent = name || clip;
     head.append(title);
     if (badgeText) {
       var badge = document.createElement('span');
@@ -162,7 +222,7 @@ function renderPromptPreview(idx, char, drama) {
       badge.textContent = badgeText;
       head.append(badge);
     }
-    if (m.promptDepth !== undefined) {
+    if (insert) {
       var depth = document.createElement('span');
       depth.className = 'pp-depth';
       depth.textContent = '深度 ' + m.promptDepth;
@@ -170,25 +230,41 @@ function renderPromptPreview(idx, char, drama) {
     }
     var count = document.createElement('span');
     count.className = 'pp-tk';
-    count.textContent = tokens.toLocaleString() + ' Token';
+    count.textContent = tokens.toLocaleString();
     head.append(count);
     box.appendChild(head);
-    if (detail) {
+    if (fold) {
       var body = document.createElement('div');
       body.className = 'prompt-preview-text';
-      body.textContent = detail;
+      if (m.previewNote) {
+        var read = document.createElement('div');
+        read.className = 'pp-read';
+        read.textContent = m.previewNote;
+        body.appendChild(read);
+      }
+      var raw = document.createElement('div');
+      raw.textContent = (media && media.detail && inHist) ? (text + (media.detail ? '\n' + media.detail : '')) : (shown || text);
+      body.appendChild(raw);
       box.appendChild(body);
     }
     slots[m.previewZone || 'before'].push(box);
   });
-  [['before', '聊天记录前'], ['history', '聊天记录'], ['after', '聊天记录后']].forEach(function(pair) {
+  [
+    ['before', '1 · 先读', '人设、记忆、世界书、现在的情况。读完这些，才读下面的聊天。'],
+    ['history', '2 · 聊天记录', '这次带上的原话，上面旧、下面新。更早的已经收进上面的总结或记忆。标着「插在这里」的，是按深度放进记录中间的。'],
+    ['after', '3 · 最后读', '写法和回复格式，离这次回复最近。']
+  ].forEach(function(pair) {
     var history = pair[0] === 'history', items = slots[pair[0]];
     var section = document.createElement(history ? 'details' : 'section');
     section.className = 'pp-section' + (history ? ' pp-history' : '');
     var heading = document.createElement(history ? 'summary' : 'div');
     heading.className = 'pp-section-title';
-    heading.textContent = pair[1] + (history ? ' · 从旧到新 · ' + historyCount + ' 条' : '');
+    heading.textContent = pair[1] + (history ? ' · ' + historyCount + ' 条' : ' · ' + items.length + ' 段');
     section.appendChild(heading);
+    var note = document.createElement('p');
+    note.className = 'pp-sec-note';
+    note.textContent = pair[2] + (pair[0] === 'before' && char.isGroup ? '群聊不读每个人自己的记忆库。' : '');
+    section.appendChild(note);
     if (history && lastRequest) {
       var receipt = document.createElement('p');
       receipt.className = 'pp-media-hint pp-media-receipt';
@@ -221,8 +297,13 @@ function renderPromptPreview(idx, char, drama) {
           list.scrollTop += Math.min(bounds.bottom - visible.bottom, Math.max(0, bounds.top - visible.top));
         }
       });
-    } else {
+    } else if (items.length) {
       section.append(...items);
+    } else if (!history) {
+      var none = document.createElement('p');
+      none.className = 'pp-sec-note';
+      none.textContent = '这次没有';
+      section.appendChild(none);
     }
     list.appendChild(section);
   });

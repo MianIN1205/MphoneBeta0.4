@@ -247,6 +247,8 @@ function sendPickedImage(files) {
         } else if (funcName === '占卜' && curC && !curC.isGroup) {
           closeCrPlusPanel();
           openTarotReading(curC);
+        } else if ((funcName === '骰子' || funcName === '猜拳') && typeof sendGame === 'function') {
+          sendGame(funcName === '猜拳' ? 'rps' : 'dice');
         } else {
           showToast('「' + funcName + '」功能开发中', 'success');
         }

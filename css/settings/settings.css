@@ -765,7 +765,10 @@ textarea.field-input { resize: vertical; font-family: inherit; line-height: 1.5;
 .meal-limits label, .meal-models label { min-width: 0; overflow-wrap: anywhere; }
 .meal-model-picker { grid-template-columns: minmax(0, 1fr) auto; }
 #settingsScreen .meal-model-picker .action-btn { padding-inline: 12px; white-space: nowrap; }
-#mealDirectForm .meal-limits { grid-template-columns: minmax(0, 1fr); }
+#mealDirectForm .meal-limits { grid-template-columns: 76px minmax(0, 1fr); }
+#mealDirectForm .meal-limits label { display: flex; flex-direction: column; gap: 4px; }
+#mealDirectExpiry { padding-inline: 8px; }
+#mealDirectExpiry::placeholder { font-size: 12px; letter-spacing: 0; }
 .meal-model-drawer[hidden], .meal-model-drawer button[hidden] { display: none; }
 .meal-model-drawer { max-height: none; }
 .meal-model-drawer > button { border-bottom: 1px solid rgba(0,0,0,0.045); }

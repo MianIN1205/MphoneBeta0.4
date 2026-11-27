@@ -63,6 +63,11 @@ const backPrompt = document.getElementById('backPrompt');
 
 dockPrompt.addEventListener('click', function() {
   appPrompt.classList.add('active');
+  // 世界书列表每次打开都收着，点文件夹才展开
+  if (typeof wbOpenFolders !== 'undefined') {
+    Object.keys(wbOpenFolders).forEach(function(k) { delete wbOpenFolders[k]; });
+    if (typeof renderWbList === 'function') renderWbList();
+  }
 });
 backPrompt.addEventListener('click', function() {
   appPrompt.classList.remove('active');

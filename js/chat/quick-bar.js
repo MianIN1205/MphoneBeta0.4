@@ -320,8 +320,8 @@ function renderQuickPop() {
       crQuickPop.appendChild(hint);
     }
   } else if (crQuickOpen === 'wb') {
-    // 世界书可多选：点分类名展开/收起，展开后里面有整本开关 + 每条单独开关
-    // 只换当前窗口（聊天 / 剧情）那栏的
+    // 世界书可多选：文件夹后面能展开，也能直接全选 / 取消。只换当前窗口（聊天 / 剧情）那栏
+    // 系统级条目不在这里关，一直带着
     var groups = wbGroups(), wbDrama = currentCrSubView === 'contacts';
     if (wbDrama && !char.dramaWb) char.dramaWb = { ids: [], folders: [] };
     var setWb = function(folders, ids) {
@@ -331,49 +331,50 @@ function renderQuickPop() {
     };
     groups.forEach(function(g) {
       var cur = charWbOf(char, wbDrama), fOn = cur.folders.indexOf(g.id) >= 0;
-      var gIds = g.entries.map(function(e) { return e.id; });
+      var pick = g.entries.filter(function(e) { return !e.system; });
+      var gIds = pick.map(function(e) { return e.id; });
       var nOn = fOn ? gIds.length : gIds.filter(function(id) { return cur.ids.indexOf(id) >= 0; }).length;
+      var allOn = !!gIds.length && (fOn || nOn === gIds.length);
       var opened = !!crQbWbOpen[g.id];
-      // 点分类名只展开/收起，不整本开关
-      var it = quickItem(g.name, fOn ? '整本 · ' + gIds.length + ' 条' : nOn ? '选了 ' + nOn + ' / ' + gIds.length + ' 条' : gIds.length + ' 条', fOn, function() {
+      var it = quickItem(g.name, !gIds.length ? '' : (nOn && !allOn ? nOn + '/' + gIds.length : gIds.length + ' 条'), allOn, function() {
         crQbWbOpen[g.id] = !crQbWbOpen[g.id]; renderQuickPop();
       });
-      if (nOn && !fOn) it.classList.add('part');
-      // 展开/收起箭头提示
+      it.classList.add('cr-qb-wb-folder');
+      if (nOn && !allOn) it.classList.add('part');
       if (gIds.length) {
-        var arrow = document.createElement('span');
+        var arrow = document.createElement('button');
+        arrow.type = 'button';
         arrow.className = 'cr-qb-expand';
-        arrow.textContent = opened ? '▾' : '▸';
+        arrow.textContent = opened ? '收起' : '展开';
+        arrow.addEventListener('click', function(e) {
+          e.stopPropagation();
+          crQbWbOpen[g.id] = !crQbWbOpen[g.id];
+          renderQuickPop();
+        });
         it.appendChild(arrow);
+        var allBtn = document.createElement('button');
+        allBtn.type = 'button';
+        allBtn.className = 'cr-qb-expand' + (allOn ? ' on' : '');
+        allBtn.textContent = allOn ? '取消' : '全选';
+        allBtn.addEventListener('click', function(e) {
+          e.stopPropagation();
+          var now = charWbOf(char, wbDrama);
+          var others = now.ids.filter(function(id) { return gIds.indexOf(id) < 0; });
+          var folders = now.folders.filter(function(id) { return id !== g.id; });
+          setWb(allOn ? folders : folders.concat([g.id]), others);
+          renderQuickPop();
+        });
+        it.appendChild(allBtn);
       }
       if (!opened || !gIds.length) return;
-      // 展开后：整本开关按钮
-      var allBtn = document.createElement('div');
-      allBtn.className = 'cr-qb-item cr-qb-wb-all';
-      var allCb = document.createElement('input');
-      allCb.type = 'checkbox';
-      allCb.checked = fOn;
-      allCb.indeterminate = !fOn && nOn > 0;
-      allCb.setAttribute('aria-label', '整本开关：' + g.name);
-      allCb.addEventListener('click', function(e) { e.stopPropagation(); });
-      allCb.addEventListener('change', function() {
-        var others = cur.ids.filter(function(id) { return gIds.indexOf(id) < 0; });
-        setWb(allCb.checked ? cur.folders.concat([g.id]) : cur.folders.filter(function(id) { return id !== g.id; }), others);
-        renderQuickPop();
-      });
-      var allLabel = document.createElement('span');
-      allLabel.className = 'cr-qb-item-name';
-      allLabel.textContent = fOn ? '整本已开' : nOn ? '选了 ' + nOn + ' 条' : '整本已关';
-      allBtn.appendChild(allCb);
-      allBtn.appendChild(allLabel);
-      allBtn.addEventListener('click', function(e) { e.stopPropagation(); allCb.click(); });
-      crQuickPop.appendChild(allBtn);
-      // 每条单独开关
-      g.entries.forEach(function(en) {
+      pick.forEach(function(en) {
         var on = fOn || cur.ids.indexOf(en.id) >= 0;
-        var sub = quickItem(en.name || '未命名', en.enabled === false ? '已关' : en.keywords ? '关键词' : '常驻', on, function() {
-          if (fOn) setWb(cur.folders.filter(function(id) { return id !== g.id; }), cur.ids.concat(gIds.filter(function(id) { return id !== en.id; })));   // 从整本变成一条条
-          else setWb(cur.folders, on ? cur.ids.filter(function(id) { return id !== en.id; }) : cur.ids.concat([en.id]));
+        var sub = quickItem(en.name || '未命名', en.keywords ? '关键词' : '', on, function() {
+          var now = charWbOf(char, wbDrama);
+          var folderOn = now.folders.indexOf(g.id) >= 0;
+          if (folderOn) setWb(now.folders.filter(function(id) { return id !== g.id; }), now.ids.concat(gIds.filter(function(id) { return id !== en.id; })));
+          else setWb(now.folders, on ? now.ids.filter(function(id) { return id !== en.id; }) : now.ids.concat([en.id]));
+          renderQuickPop();
         });
         sub.classList.add('cr-qb-sub');
       });

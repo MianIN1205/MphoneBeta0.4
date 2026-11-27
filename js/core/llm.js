@@ -429,7 +429,7 @@ function llmRequest(msgs, opts) {
           !/tool|function/i.test(em) || !/unsupported|not support|unknown|unrecognized|不支持/i.test(em)) throw err;
       llmToolBlock[cfg.model] = true;
       mphoneStore.save('mphone_tool_block', llmToolBlock);
-      showToast('这个模型不支持工具调用，已改成普通回复', 'error');
+      showToast('可能是这个模型或服务商不支持工具调用，已先改成普通回复', 'plain');
       return llmRequest(msgs, plain);
     });
   }

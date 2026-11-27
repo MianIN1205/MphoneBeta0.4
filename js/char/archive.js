@@ -146,7 +146,7 @@ function arcFromGeneric(o, names, unknown) {
 function arcParseJson(j, names, unknown) {
   // uwu 小手机
   if (j.type === 'uwu-chat-history' && Array.isArray(j.history))
-    return { from: 'uwu 小手机', msgs: j.history.map(function(h) { return arcFromUwu(h, unknown); }).filter(Boolean) };
+    return { from: '其他小手机', msgs: j.history.map(function(h) { return arcFromUwu(h, unknown); }).filter(Boolean) };
   // 眠花糖机自己的角色备份：聊天和剧情都带上（剧情的标上）
   if (j.app === 'mphone' && j.type === 'char') {
     var mine = [];

@@ -29,7 +29,8 @@ var REPLY_TAGS = [
   { names: ['改密码'], take: 'peekTakeLockTag' },                     // TA 决定改手机密码（js/chat/peek.js）
   { names: ['星星'], take: 'starTakeTag' },                           // 悄悄叠的星星放进星星瓶（js/desk/starjar.js）
   { names: ['待关心', '已关心', '补人设'], take: 'lifeTakeTags' },     // js/char/life.js
-  { names: ['记下持有'], take: 'assetTakeTags' }                      // js/chat/assets.js
+  { names: ['记下持有'], take: 'assetTakeTags' },                     // js/chat/assets.js
+  { names: ['骰子', '猜拳'] }                                         // 点数由小手机随机（js/chat/games.js），预览里藏掉
 ];
 var REPLY_HIDE_RE = new RegExp('<(' + REPLY_TAGS.reduce(function(a, t) { return a.concat(t.names); }, []).join('|') + ')(?![\\u4e00-\\u9fffA-Za-z])[\\s\\S]*?(<\\/\\1>|$)', 'gi');
 function replyHideTags(text) {
@@ -88,6 +89,7 @@ function commitAssistantReply(hist, raw, list, empty, firstMeta) {
   var charBio = '';
   raw = raw.replace(/<个性签名>([\s\S]*?)(<\/个性签名>|$)/g, function(_, s) { charBio = s.replace(/\s+/g, ' ').trim().slice(0, 30); return ''; });
   raw = raw.replace(/<拍一拍\s*\/?>(\s*<\/拍一拍>)?/g, function() { patBack = true; return ''; });
+  if (typeof gameMarkText === 'function') raw = gameMarkText(raw);
   // 剧情回复里藏着的前情：记在这一轮最后一条消息上，不显示
   raw = raw.replace(/<前情>([\s\S]*?)<\/前情>/g, function(_, s) { recap = s.replace(/\s+/g, ' ').trim().slice(0, 80); return ''; });
   // 内置助手的操作块（添加世界书、改样式…）单独成为确认卡片
@@ -118,6 +120,7 @@ function commitAssistantReply(hist, raw, list, empty, firstMeta) {
   raw = raw.replace(/<配图>([\s\S]*?)(<\/配图>|$)/g, function(_, s) { illus = s.replace(/\s+/g, ' ').trim(); return ''; });
   // ── 第二阶段：拆条、构建消息数组 ──
   var parts = splitReplyParts(raw);
+  if (typeof gameSplitParts === 'function') parts = gameSplitParts(parts);
   // 聊天窗口：角色发的照片 <照片>画面</照片> 拆成单独一条（js/chat/img-use.js）
   if (rc && chatHistories[rc.id] === hist && typeof photoSplitParts === 'function') parts = photoSplitParts(parts, hist);
   // 聊天窗口：像微信那样一句一个气泡（每次回复条数设成 1 的角色除外）
@@ -463,7 +466,7 @@ function sendMsg(userText, requestOnly, onDone, onFailure) {
     if (!isGrp) text = replyTakeTags(replyChar, text);   // 改密码、星星、待关心、记下持有…（见上面的标签表）
     var mark = list ? list.lastChild : null;
     var lead = !toolAnchor && toolRun.entries.length ? toolRun : null;
-    var added = isGrp ? groupCommitReply(replyChar, hist, text, list) : commitAssistantReply(hist, text, list, null, lead ? { mcpLead: lead } : null);
+    var added = (isGrp && isChatView) ? groupCommitReply(replyChar, hist, text, list) : commitAssistantReply(hist, text, list, null, lead ? { mcpLead: lead } : null);
     if (lead && added.length && generation.toolNotice) {
       var provisional = generation.toolNotice;
       if (list && provisional.open) {
@@ -474,7 +477,7 @@ function sendMsg(userText, requestOnly, onDone, onFailure) {
     }
     if (isChatView && !isGrp && added.length && typeof peekCaughtDone === 'function') peekCaughtDone(replyChar);   // 发现查手机的事已经提过了
     // 假流式（用户要的）：回复是一次性整段到的（接口不是边写边出、没冒过预览气泡），聊天窗口里也一条一条蹦出来
-    if (list && isGrp && added.length > 1) crRevealOneByOne(list, mark, 0);   // 群里大家一条条说
+    if (list && isGrp && isChatView && added.length > 1) crRevealOneByOne(list, mark, shownCount);   // 群聊天里大家一条条说
     else if (list && isChatView && bubbleStream && typeof assistCfg !== 'undefined' && assistCfg.fakeStream && added.length > Math.max(1, shownCount)) crRevealOneByOne(list, mark, shownCount);
     else if (list) crStick(list);
     if (!showing && added.length && replyChar) {
@@ -564,7 +567,7 @@ function sendMsg(userText, requestOnly, onDone, onFailure) {
   }).then(function() {
     if (typeof cotModeFor === 'function') cfg.cot = cotModeFor(replyChar, !isChatView);   // 这个角色这个窗口的思考方式（llm.js 的 llmThinkOff 看它）
     // 群聊开了「成员各用自己的模型」：一个个人单独问一遍，拼成一段再按「名字：」拆（js/chat/group.js）
-    if (isGrp && typeof groupSoloOn === 'function' && groupSoloOn(replyChar)) return groupSoloText(replyChar, hist, ctrl.signal);
+    if (isGrp && isChatView && typeof groupSoloOn === 'function' && groupSoloOn(replyChar)) return groupSoloText(replyChar, hist, ctrl.signal);
     var msgs = buildMsgs(replyCharIdx, hist, historySession);
     var currentTurn = hist.slice(chatCurrentTurnStart(hist));
     var records = historyQuotes(hist, currentTurn);
@@ -611,7 +614,7 @@ function sendMsg(userText, requestOnly, onDone, onFailure) {
     onText: function(full) {
       aiText = full;
       typing.bubble.classList.remove('cr-tool-status');
-      if (isGrp) { scrollLive(); return; }   // 群聊：收完再一条条出来，中间只显示「正在输入」
+      if (isGrp && isChatView) { scrollLive(); return; }   // 群聊天：收完再一条条出来，中间只显示「正在输入」；群剧情整段流出来
       // 导入的酒馆状态栏那段不在聊天里冒出来
       var liveText = statusStreamCut(replyChar, aiText, !isChatView);
       // 操作块不直接显示原始代码，写完后会变成确认卡片

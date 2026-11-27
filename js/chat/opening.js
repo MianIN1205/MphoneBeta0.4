@@ -52,7 +52,8 @@ function closeOpening() { openingOverlay.classList.remove('open'); openingState 
 // 发出去：放进剧情记录，画成旁白
 function postOpening(idx, text) {
   // 聊天记录发给 AI 时不会再换 {{char}} / {{user}}，所以存的时候就换成名字
-  var m = { role: 'user', narr: true, content: fillMacros(text, charList[idx]), time: Date.now() };
+  var who = charList[idx];
+  var m = { role: 'user', narr: true, content: (who && who.isGroup && typeof groupFill === 'function') ? groupFill(who, text) : fillMacros(text, who), time: Date.now() };
   getDramaHistory(idx).push(m);
   saveHistories();
   if (charList[openingChatCharIdx] === charList[idx]) {
@@ -64,13 +65,16 @@ function postOpening(idx, text) {
 function generateOpening(idx, dir) {
   var char = charList[idx];
   var sys = buildMsgs(idx, getDramaHistory(idx)).filter(function(m) { return m.role === 'system'; });
+  var groupScene = char && char.isGroup;
   var ask = '请为接下来的剧情写一段开场白。\n要求：\n' +
-    '- 用中立的旁白视角，交代时间、地点、氛围，以及{{char}}此刻在哪里、在做什么、状态如何\n' +
+    '- 用中立的旁白视角，交代时间、地点、氛围，以及' + (groupScene ? '群里这几个人此刻在哪里、在做什么' : '{{char}}此刻在哪里、在做什么、状态如何') + '\n' +
+    (groupScene ? '- 把群里的人都放进同一幕，不要只写一个人\n' : '') +
     '- 给{{user}}留出行动的空间：不要替{{user}}说话、做决定，也不要写{{user}}的心理\n' +
     '- 200～400 字，有画面感，结尾停在一个{{user}}可以接下去的地方\n' +
     '- 只输出开场白正文：不要标题，不要状态栏，不要任何标签\n' +
     (dir ? '想要的方向：' + dir : '方向不限：按人设和世界观自由发挥，给一个有意思的开头。');
-  return llmRequest(sys.concat([{ role: 'user', content: fillMacros(ask, char) }]), { stream: false, cfg: getApiCfg(char) }).then(function(text) {
+  var named = groupScene && typeof groupFill === 'function' ? groupFill(char, ask) : fillMacros(ask, char);
+  return llmRequest(sys.concat([{ role: 'user', content: named }]), { stream: false, cfg: getApiCfg(char) }).then(function(text) {
     text = String(text || '');
     if (typeof takeStatus === 'function') text = takeStatus(text).text;
     text = text.replace(/<(前情|记忆|日程|撤回|签名|拍一拍)[^>]*>[\s\S]*?<\/\1>/g, '')

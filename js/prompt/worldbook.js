@@ -60,9 +60,18 @@ function saveWbEntries() {
 }
 function genWbId(p) { return p + Date.now().toString(36) + Math.random().toString(36).slice(2, 6); }
 
+// 列表和拓展栏都按这个顺序：禁词、模型、角色标签、聊天、剧情、群聊，其余文件夹跟在后面
+var WB_LIST_ORDER = ['禁词', '模型适配', '角色标签', '聊天窗口', '剧情窗口', '群聊'];
+function wbFolderOrder(name) {
+  var i = WB_LIST_ORDER.indexOf(name);
+  return i < 0 ? WB_LIST_ORDER.length : i;
+}
 // 按文件夹分组：先各文件夹（含空的），最后是有条目的「未分类」
 function wbGroups() {
-  var groups = wbFolders.map(function(f) {
+  var folders = wbFolders.slice().sort(function(a, b) {
+    return wbFolderOrder(a.name) - wbFolderOrder(b.name);
+  });
+  var groups = folders.map(function(f) {
     return { id: f.id, name: f.name, entries: wbEntries.filter(function(e) { return e.folderId === f.id; }) };
   });
   var known = {};
@@ -166,12 +175,17 @@ function renderWbList() {
 
     var body = document.createElement('div');
     body.className = 'wb-folder-body';
-    g.entries.forEach(function(entry) {
+    g.entries.filter(function(e) { return e.system; }).concat(g.entries.filter(function(e) { return !e.system; })).forEach(function(entry) {
       var card = document.createElement('div');
       card.className = 'pf-entry-card';
       card.dataset.promptDropEntry = '';
       card._promptEntry = entry;
       promptDragGrip(card, wrap, function(folderId, target, after) {
+        if (entry.system && folderId !== entry.folderId) {
+          showToast('系统级全局禁词库留在这个文件夹里', 'plain');
+          renderWbList();
+          return;
+        }
         var belongs = folderId === WB_NONE
           ? function(e) { return !wbFolders.some(function(f) { return f.id === e.folderId; }); }
           : function(e) { return e.folderId === folderId; };
@@ -186,35 +200,19 @@ function renderWbList() {
       var nameEl = document.createElement('div');
       nameEl.className = 'pf-entry-card-name';
       nameEl.textContent = entry.name || '未命名';
-      var subEl = document.createElement('div');
-      subEl.className = 'pf-entry-card-sub';
-      var depth = promptDepth(entry.depth);
-      var kind = wbKind(entry);
-      var kindLabel = kind ? (WB_KIND_LABELS[kind] || '') + ' · ' : '';
-      var position = depth === undefined ? kindLabel + (entry.pos === 'after' ? '聊天记录后' : '聊天记录前') : '插入深度 ' + depth;
-      subEl.textContent = position + (entry.keywords ? ' · 关键词：' + entry.keywords : ' · 常驻');
       cb.appendChild(nameEl);
-      cb.appendChild(subEl);
       card.appendChild(cb);
-      // 条目开关：关掉后保留内容，但不发给模型
-      card.classList.toggle('disabled', entry.enabled === false);
-      var tl = document.createElement('label');
-      tl.className = 'st-toggle-wrap';
-      tl.innerHTML = '<input type="checkbox"><span class="st-toggle-slider"></span>';
-      var tcb = tl.querySelector('input');
-      tcb.checked = entry.enabled !== false;
-      tl.addEventListener('click', function(e) { e.stopPropagation(); });
-      tcb.addEventListener('change', function() {
-        entry.enabled = this.checked;
-        card.classList.toggle('disabled', !this.checked);
-        saveWbEntries();
-      });
-      card.appendChild(tl);
+      if (entry.system) {
+        var tag = document.createElement('span');
+        tag.className = 'wb-entry-tag';
+        tag.textContent = '全局';
+        card.appendChild(tag);
+      }
       card.insertAdjacentHTML('beforeend', '<svg class="pf-entry-chevron" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"></polyline></svg>');
       card.addEventListener('click', function() { openWbDetail(entry.id); });
       // 长按条目：弹菜单（重命名 / 删除）；系统条目不能删
       wbLongPress(card, function() {
-        if (entry.system) { showToast('系统条目不能删除', 'plain'); return; }
+        if (entry.system) { showToast('系统级全局禁词库不能删除', 'plain'); return; }
         wbShowMenu(card, [
           { label: '重命名', action: function() {
             askName('重命名条目', entry.name || '', function(n) {
@@ -272,16 +270,22 @@ function askDelWbFolder(g) {
   if (typeof WB_SYSTEM_FOLDER_ID !== 'undefined' && g.id === WB_SYSTEM_FOLDER_ID) {
     showToast('系统文件夹不能删除', 'plain'); return;
   }
+  var sysIn = g.entries.filter(function(en) { return en.system; });
+  var rest = g.entries.filter(function(en) { return !en.system; });
+  if (sysIn.length && !rest.length) {
+    showToast('系统级全局禁词库留在这个文件夹里，删不掉', 'plain'); return;
+  }
   var drop = function(alsoEntries) {
-    wbFolders = wbFolders.filter(function(f) { return f.id !== g.id; });
-    if (alsoEntries) wbEntries = wbEntries.filter(function(en) { return en.folderId !== g.id; });
-    else wbEntries.forEach(function(en) { if (en.folderId === g.id) en.folderId = WB_NONE; });
+    if (alsoEntries) wbEntries = wbEntries.filter(function(en) { return en.folderId !== g.id || en.system; });
+    else wbEntries.forEach(function(en) { if (en.folderId === g.id && !en.system) en.folderId = WB_NONE; });
+    if (!sysIn.length) wbFolders = wbFolders.filter(function(f) { return f.id !== g.id; });
     saveWbEntries();
     renderWbList();
+    if (sysIn.length) showToast('系统级全局禁词库留在这个文件夹里', 'plain');
   };
   if (!g.entries.length) { openConfirm('删除文件夹「' + g.name + '」？', function() { drop(false); }); return; }
   openConfirm('删除文件夹「' + g.name + '」？', function() { drop(true); },
-    { desc: '里面有 ' + g.entries.length + ' 条，可以先移到未分类', okText: '全部删除', alt: '移到未分类', onAlt: function() { drop(false); } });
+    { desc: (sysIn.length ? '系统级全局禁词库会留下来。其余 ' + rest.length + ' 条可以先移到未分类' : '里面有 ' + g.entries.length + ' 条，可以先移到未分类'), okText: '全部删除', alt: '移到未分类', onAlt: function() { drop(false); } });
 }
 
 // 文件夹命名：复用「备注名称」弹窗
@@ -331,17 +335,17 @@ function openWbDetail(id, folderId) {
   _wbOrigFolderId = sel.value;
   wbPositionPicker.set(wbPosition(entry && entry.pos), entry && entry.depth);
   wbEntryKind.querySelectorAll('.pf-radio-btn').forEach(function(b) { b.classList.toggle('selected', b.dataset.val === wbKind(entry || {})); });
-  // 系统条目：只能改内容和开关，不能删、不能改位置/类型/文件夹
+  // 系统条目：只能改内容，不能删、不能改位置/类型/文件夹
   var isSys = entry && entry.system;
   wbDetailDelete.classList.toggle('hidden', !entry || isSys);
   sel.disabled = isSys;
   wbEntryName.readOnly = isSys;
   document.getElementById('wbInjectPos').classList.toggle('disabled', isSys);
   wbEntryKind.classList.toggle('disabled', isSys);
-  if (isSys) wbDetailTitle.textContent = '系统 · ' + (entry.name || '世界书条目');
+  if (isSys) wbDetailTitle.textContent = entry.name || '系统级全局禁词库';
   // 「移动」按钮只在编辑已有条目时显示
   var moveBtn = document.getElementById('wbEntryMoveBtn');
-  if (moveBtn) moveBtn.style.display = entry ? '' : 'none';
+  if (moveBtn) moveBtn.style.display = (entry && !isSys) ? '' : 'none';
   wbDetailView.classList.add('open');
 }
 
@@ -415,7 +419,7 @@ wbDetailDelete.addEventListener('click', function() {
   }
   var target = null;
   wbEntries.forEach(function(e) { if (e.id === wbEditingId) target = e; });
-  if (target && target.system) { showToast('系统条目不能删除', 'plain'); return; }
+  if (target && target.system) { showToast('系统级全局禁词库不能删除', 'plain'); return; }
   var delId = wbEditingId;
   openConfirm('删除此世界书条目？', function() {
     wbEntries = wbEntries.filter(function(e) { return e.id !== delId; });
@@ -451,7 +455,7 @@ function getActiveWbEntries(char, hist, drama) {
     if (e.system) return false;   // 系统条目由 getSystemWbEntries 单独注入
     var fid = (e.folderId && known[e.folderId]) ? e.folderId : WB_NONE;
     var linked = ids.indexOf(e.id) >= 0 || folders.indexOf(fid) >= 0;
-    if (!linked || !e.content || e.enabled === false) return false;
+    if (!linked || !e.content) return false;
     if (!e.keywords) return true;
     return e.keywords.split(/[,，]/).some(function(k) {
       k = k.trim().toLowerCase();

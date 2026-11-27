@@ -65,7 +65,7 @@ charSaveBtn.addEventListener('click', function() {
     csPendingWb = null;
     // 从小手机备份带来的聊天记录：存成这个角色的档案（js/char/archive.js）
     if (csPendingArc && csPendingArc.msgs && csPendingArc.msgs.length && typeof arcStore !== 'undefined') {
-      arcStore[data.id] = [{ id: 'arc' + Date.now().toString(36), from: csPendingArc.from || 'uwu 小手机', file: csPendingArc.file || '', importTime: Date.now(), msgs: csPendingArc.msgs,
+      arcStore[data.id] = [{ id: 'arc' + Date.now().toString(36), from: csPendingArc.from || '其他小手机', file: csPendingArc.file || '', importTime: Date.now(), msgs: csPendingArc.msgs,
         mem: { pos: 0, count: 0, seg: 0, budget: ARC_BUDGET, careful: false, withStatus: true, done: false, err: '' } }];
       saveArcStore();
       showToast('✓ 聊天记录 ' + csPendingArc.msgs.length + ' 条存成了档案，在角色设置「扩展」页可以查看、整理成记忆', 'success');

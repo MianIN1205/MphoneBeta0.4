@@ -113,7 +113,7 @@ function wbImpRender() {
       cb._entry = e;
       cb._group = g;
       var t = document.createElement('span');
-      t.textContent = e.name + ' · ' + e.content.length + ' 字' + (e.keywords ? ' · 关键词' : ' · 常驻') + (e.enabled === false ? ' · 原来是关着的' : '');
+      t.textContent = e.name + ' · ' + e.content.length + ' 字' + (e.keywords ? ' · 关键词' : ' · 常驻');
       lab.appendChild(cb);
       lab.appendChild(t);
       box.appendChild(lab);

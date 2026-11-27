@@ -65,7 +65,7 @@ function xfFromText(text, file) {
 // uwu / ovo 的完整备份：角色资料 + 世界书，聊天记录要导入时再读（xfLoadMsgs）
 function xfFromUwu(scan, file) {
   var r = xfEmpty(file), byId = {};
-  r.from = 'uwu 小手机';
+  r.from = '其他小手机';
   scan.books.forEach(function(x) { byId[x.id] = x; });
   var used = {};
   scan.chars.forEach(function(c) {

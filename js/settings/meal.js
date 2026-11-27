@@ -26,9 +26,10 @@ const mealDirectPrefixNew = 'zl-';
 // 直连码编解码
 // 新格式 zl-{base64url(deflate(json))}：字段缩写 + deflate 压缩，比旧格式短约 40-50%
 // 旧格式 MPDC1-{base64(json)} 继续兼容识别
-// 字段映射：i=id, u=url, k=key, m=models, n=name, p=perPerson
+// 字段映射：i=id, u=url, k=key, m=models, n=name, p=perPerson, e=expires（0 是不限时，没写是旧码）
 async function mealDirectEncode(payload) {
   var compact = { i: payload.id, u: payload.url, k: payload.key, m: payload.models, n: payload.name || '', p: payload.perPerson };
+  if (payload.expires === 0 || Number.isFinite(payload.expires)) compact.e = payload.expires === 0 ? 0 : payload.expires;
   var json = JSON.stringify(compact);
   var blob = new Blob([json]);
   var cs = new CompressionStream('deflate-raw');
@@ -64,7 +65,46 @@ async function mealDirectDecodeNew(code) {
   var decompressed = await new Response(ds.readable).text();
   var c = JSON.parse(decompressed);
   // 还原缩写字段为长字段名，后续代码不用改
-  return { id: c.i, url: c.u, key: c.k, models: c.m, name: c.n || '', perPerson: c.p };
+  return { id: c.i, url: c.u, key: c.k, models: c.m, name: c.n || '', perPerson: c.p, expires: mealDirectExpiryValue(c.e) };
+}
+function mealDirectExpiryValue(value) {
+  if (value === 0 || value === '0') return 0;
+  const time = typeof value === 'number' ? value : Date.parse(value);
+  return Number.isFinite(time) && time > 0 ? time : undefined;
+}
+function mealDirectParseExpiry(text) {
+  const raw = String(text || '').trim();
+  if (!raw) throw new Error('请填写有效期，或写不限时。');
+  if (/^(不限时|不限|无限)$/.test(raw)) return 0;
+  const normalized = raw.replace('T', ' ').replace(/[年月/.]/g, '-').replace(/日/g, ' ').replace(/\s+/g, ' ').trim();
+  const match = normalized.match(/^(\d{2}|\d{4})-(\d{1,2})-(\d{1,2})(?:\s+(\d{1,2}):(\d{2}))?$/);
+  if (!match) throw new Error('时间没看懂。写成 25-02-14 23:59，或写不限时。');
+  const year = Number(match[1]) < 100 ? 2000 + Number(match[1]) : Number(match[1]);
+  const hour = match[4] === undefined ? 23 : Number(match[4]);
+  const minute = match[5] === undefined ? 59 : Number(match[5]);
+  if (hour > 23 || minute > 59) throw new Error('请输入有效的小时和分钟。');
+  const date = new Date(year, Number(match[2]) - 1, Number(match[3]), hour, minute);
+  if (date.getFullYear() !== year || date.getMonth() !== Number(match[2]) - 1 || date.getDate() !== Number(match[3])) {
+    throw new Error('这个日期不存在。');
+  }
+  return date.getTime();
+}
+function mealDirectExpiryStamp(time) {
+  const date = new Date(time);
+  const pad = n => String(n).padStart(2, '0');
+  return pad(date.getFullYear() % 100) + '-' + pad(date.getMonth() + 1) + '-' + pad(date.getDate()) + ' ' + pad(date.getHours()) + ':' + pad(date.getMinutes());
+}
+function mealDirectExpiryPhrase(expires) {
+  if (expires === 0) return '不限时';
+  const time = mealDirectExpiryValue(expires);
+  if (!time) return '有效期未填写';
+  return '有效期至 ' + mealDirectExpiryStamp(time);
+}
+function mealDirectExpiryInputValue(expires) {
+  if (expires === 0) return '不限时';
+  const time = mealDirectExpiryValue(expires);
+  if (!time) return '';
+  return mealDirectExpiryStamp(time);
 }
 function mealIsDirectCode(text) {
   return text.startsWith(mealDirectPrefixNew) || text.startsWith(mealDirectPrefixOld);
@@ -138,6 +178,13 @@ function mealBalanceText(summary) {
   return '站内共享余额 ' + new Intl.NumberFormat('zh-CN', { maximumSignificantDigits: 12 }).format(quota.available) + ' ' + quota.unit;
 }
 const mealStateLabel = { expired: '已到期', spent: '次数已用完', closed: '发码者已关闭', paused: '已暂停', missing: '此浏览器没有领取凭证' };
+function mealExpiryText(value) {
+  const time = typeof value === 'number' ? value : Date.parse(value);
+  if (!Number.isFinite(time) || time <= 0) return '';
+  return new Intl.DateTimeFormat('zh-CN', {
+    year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit'
+  }).format(time);
+}
 
 function mealShowConfig(code, state, summary) {
   // 检查当前 draft 是否来自直连预设
@@ -153,11 +200,15 @@ function mealShowConfig(code, state, summary) {
   document.getElementById('mealApiControls').hidden = !locked;
   if (directPreset) {
     const usage = typeof mealDirectGetUsage === 'function' ? mealDirectGetUsage(directPreset) : null;
-    mealHelpers.textContent = '直连模式 · 聊天内容直接发给中转站' + (usage && usage.limit ? ' · 已用 ' + usage.used + '/' + usage.limit + ' 次' : '');
+    mealHelpers.textContent = '直连模式 · 聊天内容直接发给中转站' + (usage && usage.limit ? ' · 已用 ' + usage.used + '/' + usage.limit + ' 次' : '') + ' · ' + mealDirectExpiryPhrase(directPreset.mealDirectExpires);
     mealApiBalance.textContent = '';
-  } else if (locked) mealHelpers.textContent = summary && state === 'active'
-    ? '食材来源（服务商） · ' + summary.provider + '　剩余 ' + Math.min(summary.personalRemaining, summary.remaining) + ' 次'
-    : mealStateLabel[state] || '';
+  } else if (locked) {
+    const until = mealExpiryText(summary && summary.expires);
+    const expiry = until ? ' · 有效期至 ' + until : '';
+    mealHelpers.textContent = summary && state === 'active'
+      ? '食材来源（服务商） · ' + summary.provider + '　剩余 ' + Math.min(summary.personalRemaining, summary.remaining) + ' 次' + expiry
+      : (mealStateLabel[state] || '') + expiry;
+  }
   mealApiBalance.textContent = locked && state === 'active' ? mealBalanceText(summary) : '';
 }
 function mealCheckConfig(code) {
@@ -427,8 +478,10 @@ function mealRenderOwned() {
     function render(summary) {
       const total = summary.total;
       const usage = Number.isInteger(total) ? '总请求上限 ' + total + ' 次 · 已用 ' + (total - summary.remaining) + ' 次 · ' : '';
+      const expiry = mealExpiryText(summary.expires);
       status.textContent = '已领 ' + summary.claimed + '/' + summary.portions + ' 份 · 每份 ' + summary.perPerson + ' 次 · ' +
         usage + '剩余 ' + summary.remaining + ' 次' +
+        (expiry ? ' · 有效期至 ' + expiry : '') +
         (mealStateLabel[summary.state] ? ' · ' + mealStateLabel[summary.state] : '') +
         (summary.sharedBalance && summary.state === 'active' ? ' · ' + mealBalanceText(summary) : '');
       state = summary.state;
@@ -449,7 +502,12 @@ function mealRenderOwned() {
       if (row.isConnected && !statusChanged) update(summary);
     }).catch(error => {
       if (!row.isConnected || statusChanged) return;
-      if (error.status === 410) { state = 'expired'; toggle.hidden = true; status.textContent = '已到期'; }
+      if (error.status === 410) {
+        state = 'expired';
+        toggle.hidden = true;
+        const expiry = mealExpiryText(pot.expires);
+        status.textContent = '已到期' + (expiry ? ' · 有效期至 ' + expiry : '');
+      }
       else if (!Number.isInteger(pot.claimed)) status.textContent = '暂时读不到用量。';
     });
   });
@@ -501,9 +559,7 @@ async function mealInspect() {
     title.textContent = mealPresetTitle(summary);
     const facts = document.createElement('dl');
     facts.className = 'meal-claim-facts';
-    const expiry = new Intl.DateTimeFormat('zh-CN', {
-      year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit'
-    }).format(summary.expires);
+    const expiry = mealExpiryText(summary.expires) || '未提供';
     [['食材来源（服务商）', summary.provider], ['每份请求上限', summary.perPerson + ' 次'], ['有效期至', expiry]].forEach(([label, value]) => {
       const term = document.createElement('dt');
       const detail = document.createElement('dd');
@@ -553,7 +609,7 @@ async function mealInspect() {
         }
         setDraftApiConfig(presetApiConfig(apiPresets[index]));
         renderApiPresets(index);
-        mealClaimNotice.textContent = '已保存大锅饭预设。在上方点「应用当前配置」即可使用。';
+        mealClaimNotice.textContent = '已保存大锅饭预设。在上方点「应用为默认」即可使用。';
         confirm.textContent = '打开已领取预设';
       } catch (error) {
         if (mealInspectedCode === code) mealClaimNotice.textContent = error.message || '领取失败，请重试。';
@@ -679,15 +735,16 @@ mealDirectForm.addEventListener('submit', event => {
   const address = mealDirectAddress.value.trim().replace(/\/+$/, '');
   const key = mealDirectKey.value.trim();
   const name = document.getElementById('mealDirectName').value.trim();
-  const perPerson = Number(fields.get('perPerson'));
-  mealBusy(event.submitter, async () => {
+    const perPerson = Number(fields.get('perPerson'));
+    mealBusy(event.submitter, async () => {
+    const expires = mealDirectParseExpiry(fields.get('expiry'));
     if (!address || !key || !models.length) throw new Error('请填写地址和 Key，获取模型后至少选一个。');
     if (models.length > 200) throw new Error('一张直连码最多支持 200 个模型，请减少所选模型。');
-    const payload = { id: crypto.randomUUID(), name, url: address, key, models, perPerson };
+    const payload = { id: crypto.randomUUID(), name, url: address, key, models, perPerson, expires };
     const encoded = await mealDirectEncode(payload);
     const owned = mealRemember('mphoneMealDirectOwned') || [];
     const displayName = name || address.replace(/^https?:\/\//, '').split('/')[0];
-    owned.unshift({ code: encoded, name: displayName, models, perPerson, createdAt: Date.now() });
+    owned.unshift({ code: encoded, name: displayName, models, perPerson, expires, createdAt: Date.now() });
     mealRemember('mphoneMealDirectOwned', owned);
     if (!mealDirectPanel.hidden) {
       mealDirectRenderOwned();
@@ -720,9 +777,48 @@ function mealDirectRenderOwned() {
     () => '🍙 眠花糖机大锅饭直连码：' + pot.code + '\n' + mealPresetTitle(pot) + '\n' + mealDirectShareNote);
     const info = document.createElement('div');
     info.className = 'auto-hint';
-    info.textContent = pot.models.length + ' 个模型 · 每人 ' + pot.perPerson + ' 次';
+    info.textContent = pot.models.length + ' 个模型 · 每人 ' + pot.perPerson + ' 次 · ' + mealDirectExpiryPhrase(pot.expires);
     const footer = document.createElement('div');
     footer.className = 'meal-owned-status';
+    const editTime = document.createElement('button');
+    editTime.type = 'button';
+    editTime.className = 'action-btn btn-apply';
+    editTime.textContent = '改时间';
+    editTime.addEventListener('click', () => {
+      const form = document.createElement('form');
+      form.className = 'meal-owned-edit';
+      const input = document.createElement('input');
+      input.className = 'field-input';
+      input.setAttribute('aria-label', '有效期');
+      input.placeholder = '25-02-14 23:59，或不限时，仅作备注';
+      input.value = mealDirectExpiryInputValue(pot.expires);
+      const cancel = document.createElement('button');
+      cancel.type = 'button';
+      cancel.className = 'action-btn btn-apply';
+      cancel.textContent = '取消';
+      const save = document.createElement('button');
+      save.type = 'submit';
+      save.className = 'action-btn btn-apply';
+      save.textContent = '保存';
+      form.append(input, cancel, save);
+      footer.replaceWith(form);
+      input.focus();
+      cancel.addEventListener('click', () => { form.replaceWith(footer); editTime.focus(); });
+      form.addEventListener('submit', event => {
+        event.preventDefault();
+        mealBusy(save, async () => {
+          const next = mealDirectParseExpiry(input.value);
+          const payload = await mealDirectDecode(pot.code);
+          if (!payload?.url || !payload.key) throw new Error('这张直连码读不出来，改不了时间。');
+          payload.expires = next;
+          const encoded = await mealDirectEncode(payload);
+          const list = mealRemember('mphoneMealDirectOwned') || [];
+          mealRemember('mphoneMealDirectOwned', list.map(item => item.code === pot.code ? { ...item, code: encoded, expires: next } : item));
+          mealDirectRenderOwned();
+          mealSetNotice('时间已记下。已经复制出去的旧码不会变，要对方也看到就再复制一次。');
+        });
+      });
+    });
     const manage = document.createElement('button');
     manage.type = 'button';
     manage.className = 'action-btn btn-apply';
@@ -731,7 +827,7 @@ function mealDirectRenderOwned() {
       desc: '进入服务商的 API 密钥管理，启用或停用这张饭票使用的 Key。同一把 Key 发出的其他直连饭票也会一起受影响。',
       okText: '知道了'
     }));
-    footer.append(info, manage);
+    footer.append(info, editTime, manage);
     row.append(footer);
     mealDirectIssued.append(row);
   });
@@ -772,7 +868,8 @@ async function mealInspectDirectCode(code, request) {
   const facts = document.createElement('dl');
   facts.className = 'meal-claim-facts';
   const provider = payload.url.replace(/^https?:\/\//, '').split('/')[0];
-  [['接口地址', provider], ['每人请求上限', (payload.perPerson || '不限') + ' 次（本地计数）']].forEach(([label, value]) => {
+  const expiryText = mealDirectExpiryPhrase(payload.expires);
+  [['接口地址', provider], ['每人请求上限', (payload.perPerson || '不限') + ' 次（本地计数）'], ['有效期', expiryText.startsWith('有效期至 ') ? expiryText.slice(5) : expiryText]].forEach(([label, value]) => {
     const term = document.createElement('dt');
     const detail = document.createElement('dd');
     term.textContent = label;
@@ -808,9 +905,14 @@ async function mealInspectDirectCode(code, request) {
     if (mealInspectedCode !== code) return;
     const existing = apiPresets.findIndex(p => p?.mealDirectId === directId);
     if (existing >= 0) {
-      setDraftApiConfig(presetApiConfig(apiPresets[existing]));
+      const preset = apiPresets[existing];
+      if (payload.expires !== undefined && preset.mealDirectExpires !== payload.expires) {
+        preset.mealDirectExpires = payload.expires;
+        saveApiPresets(existing);
+      }
+      setDraftApiConfig(presetApiConfig(preset));
       renderApiPresets(existing);
-      mealClaimNotice.textContent = '已切换到直连预设。在上方点「应用当前配置」即可使用。';
+      mealClaimNotice.textContent = '已切换到直连预设。在上方点「应用为默认」即可使用。';
       return;
     }
     const baseName = '🍽️大锅饭 · ' + (payload.name || '直连');
@@ -819,13 +921,13 @@ async function mealInspectDirectCode(code, request) {
     while (apiPresets.some(preset => preset?.name === name)) name = baseName + ' ' + suffix++;
     const index = apiPresets.push({
       name, url: payload.url, key: payload.key, model: payload.models[0], temp: '0.80',
-      mealDirect: true, mealDirectId: directId, mealDirectLimit: payload.perPerson
+      mealDirect: true, mealDirectId: directId, mealDirectLimit: payload.perPerson, mealDirectExpires: payload.expires
     }) - 1;
     saveApiPresets(index);
     setDraftApiConfig(presetApiConfig(apiPresets[index]));
 
     renderApiPresets(index);
-    mealClaimNotice.textContent = '已保存直连预设。在上方点「应用当前配置」即可使用。';
+    mealClaimNotice.textContent = '已保存直连预设。在上方点「应用为默认」即可使用。';
     confirm.textContent = '打开已领取预设';
   }));
   mealClaimReview.append(title, facts, models, privacy, confirm);
