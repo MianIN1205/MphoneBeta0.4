@@ -49,6 +49,10 @@ function openImgViewer(src, info) {
   ivState.index = Math.max(0, Math.min(ivState.photos.length - 1, info.index || 0));
   ivState.source = info.source || '';
   ivState.author = info.author || '';
+  ivState.refId = info.refId || '';
+  ivState.onDelete = typeof info.onDelete === 'function' ? info.onDelete : null;
+  ivState.delText = info.delText || '';
+  document.getElementById('imgViewerDel').hidden = !ivState.onDelete;
   ivShowPhoto();
   ivStickerName.textContent = info.stickerName || '';
   ivStickerName.hidden = !info.stickerName;
@@ -241,5 +245,14 @@ document.getElementById('imgViewerSave').addEventListener('click', function(e) {
 });
 document.getElementById('imgViewerFav').addEventListener('click', function(e) {
   e.stopPropagation();
-  addFav({ kind: 'image', text: '', images: [ivState.src], source: ivState.source, author: ivState.author, time: Date.now() });
+  addFav({ kind: 'image', text: '', images: [ivState.src], source: ivState.source, author: ivState.author, time: Date.now(), refId: ivState.refId || undefined });
+});
+document.getElementById('imgViewerDel').addEventListener('click', function(e) {
+  e.stopPropagation();
+  var fn = ivState.onDelete;
+  if (!fn) return;
+  openConfirm(ivState.delText || '删掉这张图片？相册里不再显示，原来的地方也会去掉。', function() {
+    fn();
+    closeImgViewer();
+  });
 });

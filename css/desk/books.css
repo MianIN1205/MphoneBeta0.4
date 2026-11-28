@@ -61,8 +61,9 @@
 .reader-chat-quote[hidden] { display: none; }
 .reader-chat-quote-label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 #readerTitle { max-width: 56%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-#readerEditBtn { margin-left: auto; }
-#readerEditBtn + .reader-toc-btn { margin-left: 0; }
+#readerPicBtn { margin-left: auto; }
+#readerEditBtn, #readerEditBtn + .reader-toc-btn { margin-left: 0; }
+.reader-pic { display: block; max-width: 100%; margin: 10px auto; border-radius: 8px; }
 .book-edit-list { display: flex; flex-direction: column; gap: 8px; margin: 6px 0 12px; }
 .book-edit-row { border: none; border-radius: 12px; padding: 11px 14px; text-align: left; font-family: inherit; font-size: 14px; color: #5a4a50; background: rgba(250,240,244,0.95); cursor: pointer; }
 .reader-bar .reader-btn { padding: 8px 16px; }

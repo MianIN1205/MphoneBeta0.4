@@ -44,6 +44,9 @@ function chatFormatRules(char) {
     rules.push(wechat + '只写你发出去的聊天内容，不写动作、神态、心理和环境描写，也不要用 *星号* 或括号写旁白。' +
       '系统提示词和预设里关于篇幅、描写、推进剧情的要求只适用于剧情空间，这里不用照做。');
   }
+  if (c.voiceDesc) {
+    rules.push('你的声音是：' + c.voiceDesc + '。说出口的句子顺着这个声音来，不要在话里解释自己的声音。');
+  }
   if (c.lang && !/^(中文|汉语|简体中文|chinese)$/i.test(c.lang)) {
     rules.push('请使用' + c.lang + '回复。');
     if (c.translate) rules.push('每条消息的外语正文后另起一行，以「〔译〕」开头给出中文翻译。');
@@ -262,7 +265,7 @@ function crossSceneContext(idx, isDrama) {
 
 // histOverride：指定使用的记录（自主活动 / 动态生成时用聊天记录），默认取当前子视图的记录
 // =============================================
-// 现实感知：现在几点（按角色所在时区，角色设置「聊天」页 → 时间与感知可以关）、隔了多久没说话；手机电量、纪念日和日程一直带着
+// 现实感知：现在几点（按角色所在时区，角色设置「聊天」页 → 时间与感知可以关）、隔了多久没说话；手机电量默认开着，同一处可以关；纪念日和日程一直带着
 // 只放进聊天窗口（以及用聊天记录的主动消息、动态、日记）；剧情空间有自己的时间线，不放
 // =============================================
 function zoneParts(t, tz) {
@@ -333,7 +336,7 @@ function realWorldContext(char, hist) {
       else if (!firstUser && gap >= 10 * 60000) lines.push('距离你上一条消息已经过去了 ' + durText(gap) + '。');
     }
   }
-  if (typeof phoneBattery !== 'undefined' && phoneBattery.real) {
+  if (c.batteryOn !== false && typeof phoneBattery !== 'undefined' && phoneBattery.real) {
     var pct = Math.round(phoneBattery.level * 100);
     lines.push('{{user}}的手机电量 ' + pct + '%' + (phoneBattery.charging ? '，正在充电' : pct <= 20 ? '，快没电了' : '') + '。');
   }

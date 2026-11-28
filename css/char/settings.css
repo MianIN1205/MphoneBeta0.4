@@ -6,6 +6,47 @@
 .auto-sub { display: none; flex-direction: column; gap: 8px; margin-top: 8px; }
 .auto-sub.open { display: flex; }
 .auto-num { width: 58px; flex: none; text-align: center; padding: 5px 4px; }
+.voice-desc { margin-top: 8px; min-height: 72px; }
+.voice-id-row .auto-row-label { flex: none; }
+.voice-id-row .field-input { flex: 1; width: auto; min-width: 0; margin: 0; }
+.voice-knobs { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; margin-top: 8px; }
+.voice-knobs > label { display: flex; flex-direction: column; gap: 4px; min-width: 0; font-size: 12px; color: #8a6a76; }
+.voice-step { position: relative; display: flex; align-items: center; }
+.voice-step-val {
+  width: 100%; margin: 0; padding: 8px 18px; border: 0; border-radius: 10px;
+  background: rgba(0,0,0,0.045); text-align: center; font: inherit; font-size: 13px; color: #555;
+}
+.voice-step-val::placeholder { color: #c8b4bc; }
+.voice-step-btn {
+  position: absolute; top: 0; bottom: 0; width: 18px; border: 0; background: transparent;
+  color: rgba(176, 144, 152, 0.38); font-size: 16px; line-height: 1; padding: 0; cursor: pointer;
+}
+.voice-step-btn[data-dir="-1"] { left: 0; }
+.voice-step-btn[data-dir="1"] { right: 0; }
+.voice-emo { position: relative; }
+.voice-emo > summary {
+  position: relative;
+  display: flex; align-items: center; justify-content: center;
+  min-height: 34px; list-style: none; cursor: pointer;
+  border-radius: 10px; background: rgba(0,0,0,0.045);
+  font-size: 13px; font-weight: 400; color: #555;
+}
+.voice-emo > summary::-webkit-details-marker { display: none; }
+.voice-emo > summary::after {
+  content: ""; position: absolute; right: 8px; top: 12px;
+  width: 6px; height: 6px; margin: 0; border: solid rgba(176, 144, 152, 0.45);
+  border-width: 0 1.5px 1.5px 0; transform: rotate(45deg);
+}
+.voice-emo[open] > summary::after { transform: translateY(2px) rotate(225deg); }
+.voice-emo-opts {
+  display: none; position: absolute; top: 38px; left: 0; z-index: 6;
+  width: 100%; max-height: 112px; overflow-y: auto; overscroll-behavior: contain;
+  box-sizing: border-box; flex-direction: column; gap: 2px; padding: 4px;
+  background: rgba(255, 248, 252, 0.98); border-radius: 10px;
+  box-shadow: 0 6px 24px rgba(0,0,0,0.14);
+}
+.voice-emo[open] .voice-emo-opts { display: flex; }
+.voice-emo-opts .pf-radio-btn { flex: none; width: 100%; margin: 0; padding: 5px 0; font-size: 12px; }
 .auto-unit { font-size: 12px; color: #999; }
 .auto-card:not(.mode-fixed) .auto-mode-fixed,
 .auto-card.mode-fixed .auto-mode-random { display: none; }

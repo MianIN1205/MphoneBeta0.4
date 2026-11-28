@@ -59,8 +59,9 @@ function galleryItems() {
     [c.charAlias, c.charName].forEach(function(n) { if (n) byName[n] = c.id; });
     [[chatHistories[c.id], '聊天'], [dramaHistories[c.id], '剧情']].forEach(function(x) {
       (x[0] || []).forEach(function(m) {
-        if (m.imgSrc && !m.recalled) (m.images && m.images.length ? m.images : [{ src: m.imgSrc }]).forEach(function(photo) {
-          items.push({ src: photo.src, who: c.id, time: m.time || 0, label: '与 ' + name + ' 的' + x[1] });
+        if (m.imgSrc && !m.recalled) (m.images && m.images.length ? m.images : [{ src: m.imgSrc }]).forEach(function(photo, pi) {
+          items.push({ src: photo.src, who: c.id, time: m.time || 0, label: '与 ' + name + ' 的' + x[1],
+            kind: x[1] === '剧情' ? 'drama' : 'chat', charId: c.id, refId: 'g:' + c.id + ':' + (m.time || 0) + ':' + pi });
         });
       });
     });
@@ -69,14 +70,14 @@ function galleryItems() {
     var a = p.author || {};
     var who = a.type === 'char' ? a.id : 'me';
     var label = (a.name || '') + ' 的动态';
-    (p.images || []).forEach(function(src) { items.push({ src: src, who: who, time: p.time || 0, label: label }); });
+    (p.images || []).forEach(function(src, pi) { items.push({ src: src, who: who, time: p.time || 0, label: label, kind: 'feed', postId: p.id, refId: 'g:feed:' + p.id + ':' + pi }); });
     (p.textImgs || []).forEach(function(t) { items.push({ text: t, who: who, time: p.time || 0, label: label }); });
   });
   loadFavs().forEach(function(f) {
     var au = typeof f.author === 'string' ? f.author : (f.author && f.author.name) || '';
     var who = byName[au] || '';
     if (!who && f.source) Object.keys(byName).some(function(n) { if (f.source.indexOf(n) >= 0) { who = byName[n]; return true; } });
-    (f.images || []).forEach(function(src) { items.push({ src: src, who: who, fav: true, time: f.savedAt || f.time || 0, label: '收藏' + (f.source ? ' · ' + f.source : '') }); });
+    (f.images || []).forEach(function(src) { items.push({ src: src, who: who, fav: true, time: f.savedAt || f.time || 0, label: '收藏' + (f.source ? ' · ' + f.source : ''), kind: 'fav', favId: f.id, refId: f.refId || ('g:fav:' + f.id) }); });
   });
   return items.sort(function(a, b) { return b.time - a.time; });
 }
@@ -98,6 +99,39 @@ function renderGalleryFilter(all) {
     row.appendChild(b);
   });
 }
+function galleryAuthor(it) {
+  if (it.who === 'me') return '我';
+  var c = charList.filter(function(x) { return x.id === it.who; })[0];
+  return c ? (c.charAlias || c.charName || '') : '';
+}
+function galleryRemove(it) {
+  if (it.kind === 'fav') { if (typeof removeFav === 'function') removeFav(it.favId); return; }
+  if (it.kind === 'feed') {
+    var post = feedPosts.filter(function(p) { return p.id === it.postId; })[0];
+    if (post) { post.images = (post.images || []).filter(function(s) { return s !== it.src; }); saveFeed(); if (typeof renderFeed === 'function') renderFeed(); }
+    return;
+  }
+  var hist = it.kind === 'drama' ? dramaHistories[it.charId] : chatHistories[it.charId];
+  if (!hist) return;
+  for (var i = 0; i < hist.length; i++) {
+    var m = hist[i];
+    if ((m.time || 0) !== it.time) continue;
+    var photos = typeof chatMessagePhotos === 'function' ? chatMessagePhotos(m) : (m.imgSrc ? [{ src: m.imgSrc }] : []);
+    if (!photos.some(function(ph) { return ph.src === it.src; })) continue;
+    var left = photos.filter(function(ph) { return ph.src !== it.src; });
+    if (!left.length) {
+      if (!m.content || /^\[图片消息/.test(m.content)) hist.splice(i, 1);
+      else { delete m.imgSrc; delete m.images; }
+    } else {
+      m.images = left;
+      m.imgSrc = left[0].src;
+      if (/^\[图片消息/.test(m.content || '')) m.content = left.length > 1 ? ('[图片消息 · ' + left.length + ' 张]') : '[图片消息]';
+    }
+    if (typeof saveHistories === 'function') saveHistories();
+    if (charList[openingChatCharIdx] && charList[openingChatCharIdx].id === it.charId && appChatRoom.classList.contains('active') && typeof renderRoomLists === 'function') renderRoomLists(openingChatCharIdx);
+    return;
+  }
+}
 function renderGallery() {
   var grid = document.getElementById('galleryGrid');
   grid.innerHTML = '';
@@ -116,7 +150,9 @@ function renderGallery() {
       cell = document.createElement('div');
       cell.className = 'gallery-cell';
       cell.style.backgroundImage = 'url(' + it.src + ')';
-      cell.addEventListener('click', function() { openImgViewer(it.src, { source: it.label, noFav: it.fav }); });
+      cell.addEventListener('click', function() {
+        openImgViewer(it.src, { source: it.label, author: galleryAuthor(it), noFav: it.fav, refId: it.refId, onDelete: function() { galleryRemove(it); renderGallery(); } });
+      });
     }
     cell.title = it.label + (it.time ? ' · ' + deskDateText(it.time) : '');
     grid.appendChild(cell);

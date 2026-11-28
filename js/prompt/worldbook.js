@@ -61,7 +61,7 @@ function saveWbEntries() {
 function genWbId(p) { return p + Date.now().toString(36) + Math.random().toString(36).slice(2, 6); }
 
 // 列表和拓展栏都按这个顺序：禁词、模型、角色标签、聊天、剧情、群聊，其余文件夹跟在后面
-var WB_LIST_ORDER = ['禁词', '模型适配', '角色标签', '聊天窗口', '剧情窗口', '群聊'];
+var WB_LIST_ORDER = ['禁词', '模型适配', '角色标签', '聊天窗口', '剧情窗口', '群聊', '语音'];
 function wbFolderOrder(name) {
   var i = WB_LIST_ORDER.indexOf(name);
   return i < 0 ? WB_LIST_ORDER.length : i;

@@ -104,7 +104,9 @@ function bookOnShelfDelete(slot) {
   bookMetas = bookMetas.filter(function(b) { return b.id !== id; });
   saveBookMetas();
   mphoneStore.remove('mphone_book_' + id);
+  mphoneStore.remove('mphone_book_pics_' + id);
   delete bookTextCache[id];
+  delete bookPicCache[id];
   Object.keys(bookTogether).forEach(function(k) { if (bookTogether[k].bookId === id) delete bookTogether[k]; });
   saveBookTogether();
 }
@@ -127,9 +129,37 @@ function bookPageOf(id, pos) {
   while (lo < hi) { var mid = (lo + hi + 1) >> 1; if (pages[mid] <= pos) lo = mid; else hi = mid - 1; }
   return lo;
 }
-function bookPageText(id, page) {
+function bookPageSlice(id, page) {
   var pages = bookPages(id), text = bookText(id);
   return text.slice(pages[page], page + 1 < pages.length ? pages[page + 1] : text.length).trim();
+}
+function bookPageText(id, page) {
+  return bookPageSlice(id, page).replace(/\u200b图:[a-z0-9]+\u200b/g, '〔插图〕');
+}
+var bookPicCache = {};
+function bookPics(id) {
+  if (!bookPicCache[id]) bookPicCache[id] = mphoneStore.load('mphone_book_pics_' + id, {}) || {};
+  return bookPicCache[id];
+}
+function saveBookPics(id) { mphoneStore.save('mphone_book_pics_' + id, bookPics(id)); }
+function bookPaintPage(body, id, text) {
+  body.textContent = '';
+  var re = /\u200b图:([a-z0-9]+)\u200b/g, last = 0, m, pics = bookPics(id), any = false;
+  while ((m = re.exec(text))) {
+    any = true;
+    if (m.index > last) body.appendChild(document.createTextNode(text.slice(last, m.index)));
+    if (pics[m[1]]) {
+      var img = document.createElement('img');
+      img.className = 'reader-pic';
+      img.alt = '插图';
+      img.src = pics[m[1]];
+      img.dataset.pic = m[1];
+      body.appendChild(img);
+    }
+    last = m.index + m[0].length;
+  }
+  if (!any) { body.textContent = text; return; }
+  if (last < text.length) body.appendChild(document.createTextNode(text.slice(last)));
 }
 var BOOK_CHAPTER_RE = /^\s*(第[0-9０-９零〇一二三四五六七八九十百千两]+[章节回卷集部篇幕话]|chapter\s*\d+|序章|序言|楔子|引子|番外|尾声|后记|终章)[^\n]{0,30}$/i;
 function bookChapters(id) {
@@ -164,7 +194,7 @@ function renderReader() {
   document.getElementById('readerTitle').textContent = meta.title;
   var body = document.getElementById('readerPage');
   body.style.fontSize = readerFont + 'px';
-  body.textContent = bookPageText(meta.id, page);
+  bookPaintPage(body, meta.id, bookPageSlice(meta.id, page));
   body.scrollTop = 0;
   document.getElementById('readerProgress').textContent = (page + 1) + ' / ' + pages.length + ' · ' + Math.floor((page + 1) / pages.length * 100) + '%';
   document.getElementById('readerPrev').disabled = page === 0;
@@ -221,6 +251,7 @@ document.getElementById('backReader').addEventListener('click', function() { app
   page.addEventListener('pointerdown', function(e) { sx = e.clientX; sy = e.clientY; moved = false; started = performance.now(); });
   page.addEventListener('pointermove', function(e) { if (Math.abs(e.clientX - sx) > 10 || Math.abs(e.clientY - sy) > 10) moved = true; });
   page.addEventListener('pointerup', function(e) {
+    if (e.target.closest && e.target.closest('.reader-pic')) return;
     if (readerSelectedExcerpt()) return;
     var dx = e.clientX - sx, dy = e.clientY - sy;
     if (Math.abs(dx) > 50 && Math.abs(dx) > Math.abs(dy) * 1.5) { readerGo(dx < 0 ? 1 : -1); return; }
@@ -560,6 +591,42 @@ function togetherContextLine(char, history) {
 // 阅读器右上角 ✎：和书架上长按 →「编辑」是同一个（bookshelf.js 的 openBookEdit）
 function shelfSlotOfNovel(id) { var b = Array.from(document.querySelectorAll('.notes-shelf-area .book')).filter(function(x) { return x._novel === id; })[0]; return b ? b.closest('.book-slot') : null; }
 document.getElementById('readerEditBtn').addEventListener('click', function() { var s = shelfSlotOfNovel(readerState.id); if (s) openBookEdit(s); });
+document.getElementById('readerPicBtn').addEventListener('click', function() {
+  var id = readerState.id, page = readerState.page;
+  if (!id || !bookMeta(id)) return;
+  openImgPicker(function(src) {
+    compressImage(src, 800, function(small) {
+      var picId = Date.now().toString(36);
+      bookPics(id)[picId] = small;
+      saveBookPics(id);
+      var text = bookText(id), at = bookPages(id)[page] || 0;
+      var next = text.slice(0, at) + '\n\u200b图:' + picId + '\u200b\n' + text.slice(at);
+      mphoneStore.save('mphone_book_' + id, next);
+      bookTextCache[id] = next;
+      delete bookPagesCache[id];
+      var meta = bookMeta(id);
+      if (meta) { meta.chars = next.length; saveBookMetas(); }
+      renderReader();
+    });
+  });
+});
+document.getElementById('readerPage').addEventListener('click', function(e) {
+  var img = e.target.closest && e.target.closest('.reader-pic');
+  if (!img) return;
+  var id = readerState.id, picId = img.dataset.pic;
+  openImgViewer(img.src, { source: (bookMeta(id) || {}).title || '书', delText: '拿掉这一页的插图？', onDelete: function() {
+    var text = bookText(id).replace(new RegExp('\\n?\\u200b图:' + picId + '\\u200b\\n?'), '\n');
+    mphoneStore.save('mphone_book_' + id, text);
+    bookTextCache[id] = text;
+    delete bookPagesCache[id];
+    var pics = bookPics(id);
+    delete pics[picId];
+    saveBookPics(id);
+    var meta = bookMeta(id);
+    if (meta) { meta.chars = text.length; saveBookMetas(); }
+    renderReader();
+  } });
+});
 // 长按卡片上备注下面那行小字：导入的书写看到哪、和谁一起看；笔记本写几页
 function bookInfoLine(book) {
   if (book._sys) return { diary: '角色写的日记都在这里', gallery: '聊天、动态、收藏里的图片都在这里', pair: '和每个角色一起写的小本子' }[book._sys] || '';

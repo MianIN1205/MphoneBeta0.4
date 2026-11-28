@@ -170,8 +170,10 @@ function readBubbleForm() {
 var DEFAULT_CHAT_CFG = {
   maxMem: 50, attention: 10, autoSum: false, sumEvery: 10,
   lang: '', translate: false, replyMin: 2, replyMax: 5,
-  patOn: true, patSuffix: '', voiceId: '', vectorOn: false, quickBar: true, actionOn: true, ctxTokens: 16000,
-  recallOn: false, recallPeek: true, timeOn: true, timeZone: '', peekNotice: false, peekLock: false, starOn: true
+  patOn: true, patSuffix: '', voiceId: '', voiceDesc: '',
+  voiceSpeed: '', voicePitch: '', voiceVol: '', voiceEmotion: '', voiceStable: '', voiceStyle: '',
+  vectorOn: false, quickBar: true, actionOn: true, ctxTokens: 16000,
+  recallOn: false, recallPeek: true, timeOn: true, batteryOn: true, timeZone: '', peekNotice: false, peekLock: false, starOn: true
 };
 // 状态栏 HTML 模板：用 {{心情}} 这样的占位符标出要填的地方，AI 只输出这些字段的内容，小手机按模板画出来
 // （清空模板就按「字段」显示成线条本卡片；模板里没有占位符的旧写法，仍让 AI 直接输出整段 HTML）
@@ -386,6 +388,14 @@ function setChatCfgForm(c) {
   $('patOn').checked      = c.patOn;
   $('patSuffix').value    = c.patSuffix;
   $('voiceId').value      = c.voiceId;
+  $('voiceDesc').value    = c.voiceDesc || '';
+  $('voiceSpeed').value   = c.voiceSpeed === '' || c.voiceSpeed == null ? '' : c.voiceSpeed;
+  $('voicePitch').value   = c.voicePitch === '' || c.voicePitch == null ? '' : c.voicePitch;
+  $('voiceVol').value     = c.voiceVol === '' || c.voiceVol == null ? '' : c.voiceVol;
+  $('voiceEmotion').value = c.voiceEmotion || '';
+  $('voiceStable').value  = c.voiceStable === '' || c.voiceStable == null ? '' : c.voiceStable;
+  $('voiceStyle').value   = c.voiceStyle === '' || c.voiceStyle == null ? '' : c.voiceStyle;
+  if (typeof voiceEmoPaint === 'function') voiceEmoPaint();
   $('vectorMemOn').checked = c.vectorOn;
   $('quickBarOn').checked = c.quickBar;
   $('chatActionOn').checked = c.actionOn;
@@ -395,6 +405,7 @@ function setChatCfgForm(c) {
   $('peekLock').checked = c.peekLock;
   $('starOn').checked = c.starOn;
   $('timeOn').checked     = c.timeOn;
+  $('batteryOn').checked  = c.batteryOn !== false;
   $('timeZone').value     = c.timeZone;
   $('memAutoSumSub').classList.toggle('open', c.autoSum);
 }
@@ -419,6 +430,13 @@ function readChatCfgForm() {
     patOn:     $('patOn').checked,
     patSuffix: $('patSuffix').value.trim(),
     voiceId:   $('voiceId').value.trim(),
+    voiceDesc: $('voiceDesc').value.trim(),
+    voiceSpeed: $('voiceSpeed').value,
+    voicePitch: $('voicePitch').value,
+    voiceVol:   $('voiceVol').value,
+    voiceEmotion: $('voiceEmotion').value,
+    voiceStable: $('voiceStable').value,
+    voiceStyle: $('voiceStyle').value,
     quickBar:  $('quickBarOn').checked,
     actionOn:  $('chatActionOn').checked,
     recallOn:  $('recallOn').checked,
@@ -427,6 +445,7 @@ function readChatCfgForm() {
     peekLock:  $('peekLock').checked,
     starOn:    $('starOn').checked,
     timeOn:    $('timeOn').checked,
+    batteryOn: $('batteryOn').checked,
     timeZone:  $('timeZone').value,
     vectorOn:  $('vectorMemOn').checked
   };
@@ -782,6 +801,64 @@ function fillCircleForm(char) {
     box.appendChild(none);
   }
 }
+var VOICE_STEP = {
+  voiceSpeed: { min: 0.5, max: 2, step: 0.1, home: 1, digits: 1 },
+  voicePitch: { min: -12, max: 12, step: 1, home: 0, digits: 0 },
+  voiceVol: { min: 0.5, max: 2, step: 0.1, home: 1, digits: 1 },
+  voiceStable: { min: 0, max: 1, step: 0.1, home: 0.5, digits: 1 },
+  voiceStyle: { min: 0, max: 1, step: 0.1, home: 0, digits: 1 }
+};
+function voiceStepBy(id, dir) {
+  var spec = VOICE_STEP[id];
+  var el = document.getElementById(id);
+  if (!spec || !el) return;
+  var cur = el.value === '' ? null : parseFloat(el.value);
+  if (cur == null || isNaN(cur)) {
+    if (dir < 0) return;
+    cur = spec.home;
+  } else {
+    cur = Math.round((cur + dir * spec.step) * 100) / 100;
+    if (cur < spec.min - 0.001) { el.value = ''; return; }
+    if (cur > spec.max) cur = spec.max;
+  }
+  el.value = cur.toFixed(spec.digits);
+}
+function voiceEmoPaint() {
+  var hidden = document.getElementById('voiceEmotion');
+  var now = document.getElementById('voiceEmoNow');
+  if (!hidden || !now) return;
+  var v = hidden.value || '';
+  var hit = '';
+  document.querySelectorAll('#voiceEmoOpts .pf-radio-btn').forEach(function(btn) {
+    var on = (btn.dataset.emo || '') === v;
+    btn.classList.toggle('selected', on);
+    if (on) hit = btn.textContent;
+  });
+  now.textContent = hit || '默认';
+}
+(function() {
+  var knobs = document.querySelector('.voice-knobs');
+  if (knobs) knobs.addEventListener('click', function(e) {
+    var btn = e.target.closest('.voice-step-btn');
+    if (!btn) return;
+    var input = btn.parentNode.querySelector('input');
+    if (input) voiceStepBy(input.id, parseInt(btn.dataset.dir, 10) || 0);
+  });
+  var opts = document.getElementById('voiceEmoOpts');
+  if (opts) opts.addEventListener('click', function(e) {
+    var btn = e.target.closest('[data-emo]');
+    if (!btn) return;
+    var hidden = document.getElementById('voiceEmotion');
+    if (hidden) hidden.value = btn.dataset.emo || '';
+    voiceEmoPaint();
+    var fold = document.getElementById('voiceEmoFold');
+    if (fold) fold.open = false;
+  });
+})();
+function voiceCardOn(c) {
+  c = c || {};
+  return !!(c.voiceId || c.voiceDesc || c.voiceSpeed || c.voicePitch || c.voiceVol || c.voiceEmotion || c.voiceStable || c.voiceStyle);
+}
 function readCircleForm() {
   return Array.prototype.map.call(document.querySelectorAll('#csCircleList .feed-visible-chip.on'), function(c) { return c.dataset.id; });
 }
@@ -802,6 +879,13 @@ function readCharForm() {
   stashImpression();
   csLookParts[csLookView] = readLookPartForm();
   var lc = csLookParts.chat;
+  var chatCfg = readChatCfgForm();
+  chatCfg.voiceLinked = !!(old.chatCfg && old.chatCfg.voiceLinked);
+  var folders = csWbPartsNow().chat.folders.slice();
+  if (voiceCardOn(chatCfg) && !chatCfg.voiceLinked && typeof WB_VOICE_FOLDER_ID === 'string') {
+    if (folders.indexOf(WB_VOICE_FOLDER_ID) < 0) folders.push(WB_VOICE_FOLDER_ID);
+    chatCfg.voiceLinked = true;
+  }
   return Object.assign({}, old, {
     charName:         document.getElementById('charName').value.trim(),
     charAlias:        document.getElementById('charAlias').value.trim(),
@@ -817,10 +901,10 @@ function readCharForm() {
     customCss:        lc.customCss,
     dramaLook:        csLookParts.drama,
     worldbookIds:     csWbPartsNow().chat.ids,
-    worldbookFolders: csWbPartsNow().chat.folders,
+    worldbookFolders: folders,
     dramaWb:          csWbPartsNow().drama,
     auto:             readAutoForm(),
-    chatCfg:          readChatCfgForm(),
+    chatCfg:          chatCfg,
     look:             lc.look,
     circle:           readCircleForm(),
     selfFacts:        typeof readLifeForm === 'function' ? readLifeForm() : old.selfFacts,

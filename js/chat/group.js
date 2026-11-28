@@ -188,17 +188,20 @@ function buildGroupMsgs(g, history, preview) {
 }
 function groupNowContext(g, hist) {
   var c = groupChatCfg(g);
-  if (!c.timeOn) return '';
-  var now = Date.now(), mine = typeof zoneTimeText === 'function' ? zoneTimeText(now) : groupNowText();
-  var theirs = c.timeZone && typeof zoneTimeText === 'function' ? zoneTimeText(now, c.timeZone) : mine;
-  var lines = [theirs !== mine && typeof zoneLabel === 'function' ? '群里的时间（' + zoneLabel(c.timeZone) + '）现在是 ' + theirs + '；{{user}}那边是 ' + mine + '。' : '现在是 ' + mine + '。'];
-  var lastT = 0;
-  (hist || []).forEach(function(m) { if (m && m.time && !m.action && (m.content || m.pat || m.play || m.game)) lastT = m.time; });
-  if (lastT && now - lastT >= 10 * 60000) lines.push('距离群里上一条消息已经过去了 ' + durText(now - lastT) + '。');
-  if (typeof phoneBattery !== 'undefined' && phoneBattery.real) {
+  var lines = [];
+  if (c.timeOn) {
+    var now = Date.now(), mine = typeof zoneTimeText === 'function' ? zoneTimeText(now) : groupNowText();
+    var theirs = c.timeZone && typeof zoneTimeText === 'function' ? zoneTimeText(now, c.timeZone) : mine;
+    lines.push(theirs !== mine && typeof zoneLabel === 'function' ? '群里的时间（' + zoneLabel(c.timeZone) + '）现在是 ' + theirs + '；{{user}}那边是 ' + mine + '。' : '现在是 ' + mine + '。');
+    var lastT = 0;
+    (hist || []).forEach(function(m) { if (m && m.time && !m.action && (m.content || m.pat || m.play || m.game)) lastT = m.time; });
+    if (lastT && now - lastT >= 10 * 60000) lines.push('距离群里上一条消息已经过去了 ' + durText(now - lastT) + '。');
+  }
+  if (c.batteryOn !== false && typeof phoneBattery !== 'undefined' && phoneBattery.real) {
     var pct = Math.round(phoneBattery.level * 100);
     lines.push('{{user}}的手机电量 ' + pct + '%' + (phoneBattery.charging ? '，正在充电' : pct <= 20 ? '，快没电了' : '') + '。');
   }
+  if (!lines.length) return '';
   return '【现在】' + lines.join('') + '心里有数就好，不用主动报时间，也不要催{{user}}去睡觉。';
 }
 function groupReplyN(g) { var n = GROUP_REPLY_N[groupCfgOf(g).replyN] || GROUP_REPLY_N.mid; return n[0] + '～' + n[1]; }
@@ -552,6 +555,7 @@ function openGroupSetting(g) {
   document.getElementById('grpPatOn').checked = !!cc.patOn;
   document.getElementById('grpPatSuffix').value = cc.patSuffix || '';
   document.getElementById('grpTimeOn').checked = !!cc.timeOn;
+  document.getElementById('grpBatteryOn').checked = cc.batteryOn !== false;
   document.getElementById('grpTimeZone').value = cc.timeZone || '';
   document.getElementById('grpLang').value = cc.lang || '';
   document.getElementById('grpTranslate').checked = !!cc.translate;
@@ -1044,6 +1048,7 @@ document.getElementById('groupSaveBtn').addEventListener('click', function() {
     patOn: document.getElementById('grpPatOn').checked,
     patSuffix: document.getElementById('grpPatSuffix').value.trim().slice(0, 8),
     timeOn: document.getElementById('grpTimeOn').checked,
+    batteryOn: document.getElementById('grpBatteryOn').checked,
     timeZone: document.getElementById('grpTimeZone').value,
     lang: document.getElementById('grpLang').value.trim().slice(0, 20),
     translate: document.getElementById('grpTranslate').checked,

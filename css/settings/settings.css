@@ -353,6 +353,30 @@
 .nai-param-row { display: flex; gap: 10px; }
 .nai-param-row > div { flex: 1; min-width: 0; }
 .tts-is-minimax .tts-minimax-only { display: block; }
+.tts-voice-head { display: flex; gap: 8px; }
+.tts-voice-head .field-label:first-child { flex: 1; }
+.tts-voice-head .field-label:last-child { width: 58px; flex: none; margin-bottom: 7px; }
+.tts-speed { width: 58px; flex: none; margin: 0; padding: 9px 2px; text-align: center; }
+.tts-voice-add { display: flex; gap: 8px; align-items: center; margin-top: 8px; }
+.tts-voice-add .field-input { flex: 1; min-width: 0; margin: 0; }
+.tts-voice-add .action-btn { flex: none; width: 72px; padding: 10px 0; }
+.tts-voice-bar {
+  position: sticky; top: 0; z-index: 1; display: flex; align-items: center;
+  background: rgba(255,248,252,0.98); border-bottom: 1px solid rgba(0,0,0,0.06);
+}
+.tts-voice-search {
+  flex: 1; min-width: 0; box-sizing: border-box;
+  border: 0; background: transparent;
+  padding: 8px 12px; font: inherit; font-size: 13px; color: #555; outline: none;
+}
+#ttsVoiceRefresh { display: none; }
+.tts-voice-bar #ttsVoiceRefresh { display: flex; border-radius: 0; background: transparent; }
+.tts-pop-label { padding: 8px 12px 2px; font-size: 11px; color: #c08088; }
+.model-popup-item small { display: block; margin-top: 2px; font-size: 11px; color: #b09098; font-weight: 400; }
+.tts-voice-del {
+  float: right; border: 0; background: transparent; color: #c08088;
+  font: inherit; font-size: 16px; line-height: 1; padding: 0 0 0 8px; cursor: pointer;
+}
 textarea.field-input { resize: vertical; font-family: inherit; line-height: 1.5; }
 
 /* 设置 — 数据管理：左侧占用圆环，右侧备份 / 导入 */
@@ -640,6 +664,38 @@ textarea.field-input { resize: vertical; font-family: inherit; line-height: 1.5;
 .pd-tools button { flex: 1; border: none; border-radius: 8px; padding: 7px 0; font: inherit; font-size: 12px; background: rgba(0,0,0,0.04); color: #888; cursor: pointer; }
 .pd-item { padding: 9px 12px; border-radius: 8px; font-size: 13px; color: #444; cursor: pointer; }
 .pd-item:active, .pd-item.selected { background: rgba(208, 88, 120, 0.1); color: #C05070; font-weight: 600; }
+.style-pre { display: flex; align-items: center; gap: 8px; padding: 6px 8px 6px 12px; }
+.style-pre-name, .style-pre-slot, .style-pre-ex, .style-pre-x {
+  appearance: none; -webkit-appearance: none; font-family: inherit;
+}
+select.img-pick-src { display: none; }
+.img-pick { width: 100%; }
+.style-pre-name {
+  flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-align: left;
+  border: 0; background: transparent; padding: 6px 0; font-size: 13px; font-weight: 500; color: inherit; cursor: pointer;
+}
+.style-pre-slots { display: flex; gap: 4px; flex: none; }
+.style-pre-slot {
+  position: relative; display: flex; align-items: center; justify-content: center;
+  width: 32px; height: 32px; flex: none; border-radius: 8px; padding: 0;
+  background-color: rgba(255,255,255,0.8); background-position: center; background-size: cover; background-repeat: no-repeat;
+  border: 1px dashed rgba(201, 160, 174, 0.7);
+  -webkit-user-drag: none; user-select: none; cursor: default;
+}
+.style-pre-slot.has-img { border-style: solid; border-color: rgba(255,255,255,0.9); cursor: zoom-in; box-shadow: 0 1px 4px rgba(0,0,0,0.08); }
+.style-pre-slot.editing:not(.has-img) { cursor: pointer; }
+.style-pre-slot.editing:not(.has-img)::after {
+  content: "+"; color: #d7a8b6; font-size: 18px; font-weight: 500; line-height: 1;
+}
+.style-pre-ex {
+  flex: none; border: 0; border-radius: 10px; padding: 6px 8px; font-size: 11px; font-weight: 600;
+  background: rgba(208, 88, 120, 0.10); color: #C05070; cursor: pointer;
+}
+.style-pre-ex.on { background: rgba(208, 88, 120, 0.18); box-shadow: inset 0 0 0 1.5px rgba(208,88,120,0.35); }
+.style-pre-x {
+  position: absolute; top: -4px; right: -4px; width: 14px; height: 14px; border: 0; border-radius: 50%;
+  background: rgba(192, 80, 112, 0.88); color: #fff; font-size: 11px; line-height: 14px; padding: 0; cursor: pointer;
+}
 /* 从别的小手机搬家（js/settings/transfer.js）：认出来的一样一行，勾选 + 放到哪里 */
 .xf-list { max-height: 55vh; overflow-y: auto; display: flex; flex-direction: column; gap: 8px; margin-bottom: 12px; }
 .xf-sec { font-size: 12px; font-weight: 600; color: #b08a96; margin: 4px 2px 0; }

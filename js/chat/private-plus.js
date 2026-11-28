@@ -539,7 +539,7 @@ function openPrivateCallScreen(ctx, mode) {
       input.value = ''; clearTake(); hint.textContent = '可以继续说话或打字。';
       if (ttsCfg.key) {
         try {
-          var blob = await ttsSynthesize(reply);
+          var blob = await ttsSynthesize(reply, '', null, ctx.char);
           if (closed) return;
           var url = URL.createObjectURL(blob);
           voiceUrls.push(url);

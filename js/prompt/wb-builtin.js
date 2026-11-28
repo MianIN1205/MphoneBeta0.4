@@ -240,3 +240,37 @@ var WB_GROUP_ENTRIES = [
   mphoneStore.save('mphone_wb_group_seed', 1);
   if (typeof renderWbList === 'function') renderWbList();
 })();
+
+// 自带的「语音」世界书。第一次给角色保存声音卡片时关联到聊天窗口。
+// 放进去以后就是普通条目，能改能关。只写一次，不覆盖后来改过的。
+var WB_VOICE_FOLDER_ID = 'wf-voice';
+var WB_VOICE_ENTRIES = [
+  {
+    id: 'wb-voice-said',
+    name: '只读说出口的话',
+    content: '有些话会被读出来。读的是说出口的句子，不是动作，也不是旁白。\n· 动作、神态仍放在 *星号* 里。星号里的内容不会被朗读。\n· 气泡里只写这个人真的会说的话。不要写「语气悲伤」「停顿两秒」「声音放轻」这种说明。\n· 打字聊天仍按平时的样子。不要为了朗读把每句都改成播音稿。'
+  },
+  {
+    id: 'wb-voice-pause',
+    name: '停顿',
+    content: '想让声音停一下，就写在句子里，不要另起一行解释。\n· 短停用省略号……。一句里最多一处。\n· 一句说完、隔开再接，用破折号——。不要连着写很多个。\n· 不要为了停顿把一句话拆成好几个词。停是换气，不是把话切断。\n· 平时打字不必每句都停。只有这句话的轻重本身需要换气时才用。'
+  },
+  {
+    id: 'wb-voice-tone',
+    name: '语气',
+    content: '情绪放在用词和句尾，不另写标签。\n· 难过就短一点、轻一点，少用感叹号。急就少绕，一句把事说完。高兴不用每句都提高。\n· 同一种句尾不要连着三句。问号一轮里仍按聊天的规矩，不要为了语气连着问。\n· 不要用朗读腔，也不要把同一句话说成稿子。这个人平时怎么说，读出来还是那么说。\n· 声音卡片里写了这个人的声音，就顺着那个声音选词，不要在句子里描述自己的嗓音。'
+  }
+];
+(function() {
+  if (Number(mphoneStore.load('mphone_wb_voice_seed', 0)) >= 1) return;
+  if (!wbFolders.some(function(f) { return f.id === WB_VOICE_FOLDER_ID; })) {
+    wbFolders.push({ id: WB_VOICE_FOLDER_ID, name: '语音' });
+  }
+  WB_VOICE_ENTRIES.forEach(function(def) {
+    if (wbEntries.some(function(e) { return e.id === def.id; })) return;
+    wbEntries.push({ id: def.id, name: def.name, keywords: '', content: def.content, pos: 'after', folderId: WB_VOICE_FOLDER_ID, kind: 'rule', enabled: true });
+  });
+  saveWbEntries();
+  mphoneStore.save('mphone_wb_voice_seed', 1);
+  if (typeof renderWbList === 'function') renderWbList();
+})();

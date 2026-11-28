@@ -387,7 +387,7 @@
 .phone .img-viewer img { -webkit-touch-callout: default; }
 .img-viewer-bar {
   position: absolute; left: 0; right: 0; bottom: 0;
-  display: flex; justify-content: center; gap: 12px;
+  display: flex; justify-content: center; flex-wrap: wrap; gap: 12px;
   padding: 12px 0 calc(16px + env(safe-area-inset-bottom, 0px));
   background: linear-gradient(to top, rgba(0,0,0,0.5), rgba(0,0,0,0));
 }
