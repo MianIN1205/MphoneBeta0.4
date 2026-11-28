@@ -289,7 +289,6 @@ function renderHistMsgContent(m, list, empty) {
   crRowSpeaker = null;
   r.row._msg = m;
   r.row._extras = thinkBar ? [thinkBar] : [];
-  if (typeof addMianinIntroGuide === 'function') addMianinIntroGuide(m, r.bubble);
   if (toolLead) r.row._mcpNotes = [toolLead];
   // 群聊：换了一个人说话时，头像旁边写上名字（js/chat/group.js）
   if (role === 'ai' && m.speaker) {
@@ -302,7 +301,11 @@ function renderHistMsgContent(m, list, empty) {
       var gNow = charList[openingChatCharIdx];
       nameEl.textContent = spk ? (typeof groupNick === 'function' ? groupNick(gNow, spk) : groupLabel(spk)) : '';   // 群里显示群昵称
       var honor = spk && gNow && gNow.isGroup && typeof groupHonor === 'function' ? groupHonor(gNow, spk) : '';
-      if (honor) { var tag = document.createElement('span'); tag.className = 'cr-honor'; tag.textContent = honor; nameEl.appendChild(tag); }
+      if (honor) {
+        var tag = document.createElement('span'); tag.className = 'cr-honor'; tag.textContent = honor;
+        if (typeof honorTagPaint === 'function') honorTagPaint(tag, groupHonorColor(gNow, spk));
+        nameEl.appendChild(tag);
+      }
       list.insertBefore(nameEl, r.row);
       r.row._extras.push(nameEl);
     }

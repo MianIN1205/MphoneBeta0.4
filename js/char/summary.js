@@ -20,7 +20,8 @@ function roundsAsText(rounds, char) {
         : m.voice ? '[语音]' + (m.transcript || '')
         : String(m.content || '').replace(/〔译〕[\s\S]*$/, '').trim();
       if (m.quote && !m.recalled) c = '（引用 ' + m.quote.author + '：' + m.quote.text + '）' + c;
-      return (m.role === 'user' ? uName : cName) + '：' + c;
+      var who = m.role === 'user' ? uName : (char.isGroup && m.speaker && typeof groupLabel === 'function' ? (groupLabel(charList[findCharIdx(m.speaker)]) || cName) : cName);
+      return who + '：' + c;
     }).join('\n');
   }).join('\n');
 }
@@ -42,6 +43,7 @@ function summarizeRounds(idx, from, to) {
     mem.upTo = Math.max(mem.upTo || 0, to);
     saveCharList();
     if (appCharSetting.classList.contains('active') && charList[editingCharIndex] === char) renderMemSummaries(char);
+    if (typeof appGroupSetting !== 'undefined' && appGroupSetting.classList.contains('active') && grpEdit && grpEdit.g === char) renderMemSummaries(char, 'grpSumList');
     return item;
   });
 }
@@ -71,8 +73,9 @@ function maybeAutoSummarize(idx) {
     .then(function() { delete char._sumBusy; });
 }
 
-function renderMemSummaries(char) {
-  var list = document.getElementById('memSumList');
+function renderMemSummaries(char, listId) {
+  var list = document.getElementById(listId || 'memSumList');
+  if (!list) return;
   list.innerHTML = '';
   var real = charList[findCharIdx(char.id)];
   if (!real || !real.memory || !real.memory.summaries.length) {
@@ -96,7 +99,7 @@ function renderMemSummaries(char) {
         // 删的是最后一段：这些回合重新按原文发送，之后可再次总结
         if (i === mem.summaries.length) mem.upTo = s.from;
         saveCharList();
-        renderMemSummaries(real);
+        renderMemSummaries(real, listId);
       });
     });
     head.appendChild(info);

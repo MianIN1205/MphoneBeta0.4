@@ -667,6 +667,7 @@ textarea.field-input { resize: vertical; font-family: inherit; line-height: 1.5;
 #appCharSetting .settings-card, #appGroupSetting .settings-card, #appMemory .settings-card {
   border-radius: 13px; margin-bottom: 8px; padding: 9px 11px;
 }
+#appCharSetting .world-book-card, #appGroupSetting .world-book-card { border-radius: 13px; margin-bottom: 8px; }
 #settingsScreen .field-label, #appAppearance .field-label,
 #appCharSetting .field-label, #appGroupSetting .field-label {
   margin-top: 9px; margin-bottom: 4px;

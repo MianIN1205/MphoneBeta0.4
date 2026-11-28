@@ -544,7 +544,7 @@ function sendMsg(userText, requestOnly, onDone, onFailure) {
     endGen();
     if (aiText) {
       var added = deliver(aiText);
-      if (isChatView && !isGrp) maybeAutoSummarize(replyCharIdx);
+      if (isChatView) maybeAutoSummarize(replyCharIdx);
       if (onDone) onDone(added);
     } else {
       typing.row.remove();

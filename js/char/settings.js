@@ -711,7 +711,8 @@ function fillCharForm(char) {
   csWbParts = { chat: wbChat, drama: char.dramaWb ? { ids: (char.dramaWb.ids || []).slice(), folders: (char.dramaWb.folders || []).slice() } : { ids: [], folders: [] } };
   csWbView = 'chat';
   csWbPendingOn = true;
-  renderCharWbLinks(wbChat.ids, wbChat.folders);
+  csWbOpen = {};
+  renderCharWbLinks();
   renderMemSummaries(char);
   if (typeof renderArchiveList === 'function') renderArchiveList(char);
 }
@@ -832,121 +833,55 @@ var csPendingArc = null;
 // 两栏：csWbParts = { chat: { ids, folders }, drama: { ids, folders } }，表单里显示的是 csWbView 那一栏
 var csWbParts = { chat: { ids: [], folders: [] }, drama: { ids: [], folders: [] } };
 var csWbView = 'chat', csWbPendingOn = true;
-function csWbPartsNow() {
-  csWbParts[csWbView] = { ids: readCharWbLinks(), folders: readCharWbFolders() };
-  return csWbParts;
-}
+function csWbPartsNow() { return csWbParts; }
 function switchCsWbView(view) {
   if (view === csWbView) return;
-  csWbPartsNow();
   var p = document.getElementById('wbPendingCb');
   if (p) csWbPendingOn = p.checked;
   csWbView = view;
-  renderCharWbLinks(csWbParts[view].ids, csWbParts[view].folders);
+  renderCharWbLinks();
 }
-function renderCharWbLinks(ids, folderIds) {
+var csWbOpen = {};
+function renderCharWbLinks() {
   var wrap = document.getElementById('wbContent');
-  wrap.innerHTML = '';
-  var groups = wbGroups();
-  var tabs = document.createElement('div');
-  tabs.className = 'pf-radio-row wb-view-row';
-  [['chat', '聊天窗口'], ['drama', '剧情窗口']].forEach(function(t) {
-    var b = document.createElement('button');
-    b.className = 'pf-radio-btn' + (csWbView === t[0] ? ' selected' : '');
-    b.textContent = t[1];
-    b.addEventListener('click', function(e) { e.stopPropagation(); switchCsWbView(t[0]); });
-    tabs.appendChild(b);
-  });
-  wrap.appendChild(tabs);
-  var tip = document.createElement('div');
-  tip.className = 'auto-hint wb-view-hint';
-  tip.textContent = csWbView === 'chat' ? '在聊天窗口里用的世界书' : '在剧情窗口里用的世界书（和聊天窗口分开勾）';
-  wrap.appendChild(tip);
-
-  if (csPendingWb && csPendingWb.entries.length) {
-    var pending = document.createElement('div');
-    pending.className = 'wb-link-folder';
-    pending.innerHTML = '<div class="wb-link-folder-head wb-link-pending"><label>' +
-      '<input type="checkbox" id="wbPendingCb"' + (csWbPendingOn ? ' checked' : '') + '><span></span></label></div>';
-    pending.querySelector('span').textContent = '（导入）' + csPendingWb.entries.length + ' 条，保存角色时' + (csPendingWb.entries.some(function(e) { return e.folderName; }) ? '按原来的分类放进文件夹并关联' : '创建文件夹');
-    pending.querySelector('input').addEventListener('change', updateCharWbCount);
-    wrap.appendChild(pending);
-  } else if (!groups.length) {
-    wrap.insertAdjacentHTML('beforeend', '<div class="wb-empty-hint">暂无关联世界书</div>');
-  }
-
-  groups.forEach(function(g) {
-    var box = document.createElement('div');
-    box.className = 'wb-link-folder';
-    var head = document.createElement('div');
-    head.className = 'wb-link-folder-head';
-    var label = document.createElement('label');
-    var fcb = document.createElement('input');
-    fcb.type = 'checkbox';
-    fcb.className = 'wb-link-folder-cb';
-    fcb.value = g.id;
-    fcb.checked = folderIds.indexOf(g.id) >= 0;
-    var name = document.createElement('span');
-    name.textContent = g.name;
-    label.appendChild(fcb);
-    label.appendChild(name);
-    var count = document.createElement('span');
-    count.className = 'wb-folder-count';
-    count.textContent = g.entries.filter(function(e) { return !e.system; }).length + ' 条';
-    var expand = document.createElement('button');
-    expand.className = 'wb-link-expand';
-    expand.innerHTML = FOLDER_ARROW;
-    expand.addEventListener('click', function() { box.classList.toggle('open'); });
-    head.appendChild(label);
-    head.appendChild(count);
-    head.appendChild(expand);
-    box.appendChild(head);
-
-    var list = document.createElement('div');
-    list.className = 'wb-link-folder-entries';
-    g.entries.forEach(function(entry) {
-      if (entry.system) return;
-      var el = document.createElement('label');
-      el.className = 'wb-link-item';
-      var cb = document.createElement('input');
-      cb.type = 'checkbox';
-      cb.className = 'wb-link-entry-cb';
-      cb.value = entry.id;
-      cb.checked = ids.indexOf(entry.id) >= 0;
-      cb.addEventListener('change', updateCharWbCount);
-      var span = document.createElement('span');
-      span.textContent = entry.name || '未命名';
-      el.appendChild(cb);
-      el.appendChild(span);
-      list.appendChild(el);
+  var top = wrap.scrollTop;
+  var tabs = wrap.querySelector('.wb-view-row');
+  if (!tabs || tabs.dataset.view !== csWbView) {
+    wrap.innerHTML = '';
+    tabs = document.createElement('div');
+    tabs.className = 'pf-radio-row wb-view-row';
+    tabs.dataset.view = csWbView;
+    [['chat', '聊天窗口'], ['drama', '剧情窗口']].forEach(function(t) {
+      var b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'pf-radio-btn' + (csWbView === t[0] ? ' selected' : '');
+      b.textContent = t[1];
+      b.addEventListener('click', function(e) { e.stopPropagation(); switchCsWbView(t[0]); });
+      tabs.appendChild(b);
     });
-    box.appendChild(list);
-
-    // 整个文件夹已关联时，里面的条目显示为已勾选且不可单独改
-    function syncFolder() {
-      list.querySelectorAll('input').forEach(function(cb) {
-        cb.disabled = fcb.checked;
-        if (fcb.checked) cb.checked = true;
-      });
-      updateCharWbCount();
+    wrap.appendChild(tabs);
+    var tip = document.createElement('div');
+    tip.className = 'auto-hint wb-view-hint';
+    tip.textContent = csWbView === 'chat' ? '在聊天窗口里用的世界书' : '在剧情窗口里用的世界书（和聊天窗口分开勾）';
+    wrap.appendChild(tip);
+    if (csPendingWb && csPendingWb.entries.length) {
+      var pending = document.createElement('div');
+      pending.className = 'wb-link-pending';
+      pending.innerHTML = '<label><input type="checkbox" id="wbPendingCb"' + (csWbPendingOn ? ' checked' : '') + '><span></span></label>';
+      pending.querySelector('span').textContent = '（导入）' + csPendingWb.entries.length + ' 条，保存角色时' + (csPendingWb.entries.some(function(e) { return e.folderName; }) ? '按原来的分类放进文件夹并关联' : '创建文件夹');
+      pending.querySelector('input').addEventListener('change', updateCharWbCount);
+      wrap.appendChild(pending);
     }
-    fcb.addEventListener('change', function() {
-      if (!fcb.checked) list.querySelectorAll('input').forEach(function(cb) { cb.checked = ids.indexOf(cb.value) >= 0; });
-      syncFolder();
-    });
-    syncFolder();
-    wrap.appendChild(box);
+  }
+  paintWbBooks(wrap, csWbParts[csWbView], csWbOpen, function(next) {
+    csWbParts[csWbView] = next;
+    renderCharWbLinks();
   });
+  wrap.scrollTop = top;
   updateCharWbCount();
 }
-
-function readCharWbFolders() {
-  return Array.from(document.querySelectorAll('#wbContent .wb-link-folder-cb:checked')).map(function(cb) { return cb.value; });
-}
-// 单独关联的条目（所在文件夹已整体关联的不重复记录）
-function readCharWbLinks() {
-  return Array.from(document.querySelectorAll('#wbContent .wb-link-entry-cb:checked:not(:disabled)')).map(function(cb) { return cb.value; });
-}
+function readCharWbFolders() { return (csWbParts[csWbView] && csWbParts[csWbView].folders) || []; }
+function readCharWbLinks() { return (csWbParts[csWbView] && csWbParts[csWbView].ids) || []; }
 function updateCharWbCount() {
   var p = document.getElementById('wbPendingCb'), add = p && p.checked ? 1 : 0;
   var now = readCharWbFolders().length + readCharWbLinks().length + add;

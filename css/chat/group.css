@@ -14,8 +14,9 @@
 .char-avatar-box.grp-avatar .grp-av-emoji { font-size: 30px; }
 
 /* 聊天里：换了一个人说话时头像上方写名字 */
-.cr-speaker { font-size: 11px; color: #5c4652; margin: 4px 0 -4px 40px; line-height: 1.3; }
+.cr-speaker { font-size: 11px; color: #777; margin: 4px 0 -4px 40px; line-height: 1.3; }
 .cr-speaker .cr-honor { display: inline-block; margin-left: 4px; padding: 0 5px; border-radius: 7px; background: rgba(224, 107, 139, 0.14); color: #c05070; font-size: 10px; line-height: 1.5; vertical-align: 1px; }
+.grp-honor-swatches { margin: 0 0 10px; }
 
 /* 新建群聊（小窗口）；群设置是整页（index.html 的 #appGroupSetting） */
 .grp-modal { width: 310px; }
@@ -80,6 +81,8 @@
 .grp-range { width: 100%; accent-color: #E58FA3; }
 .grp-css { min-height: 70px; font-family: ui-monospace, Menlo, monospace; font-size: 12px; }
 .grp-opts .pf-radio-btn { flex: none; white-space: nowrap; padding: 5px 11px; }
+#grpReplyN { flex-wrap: nowrap; }
+#grpReplyN .pf-radio-btn { flex: 1; min-width: 0; padding: 5px 4px; text-align: center; }
 
 /* 群设置：成员一格格（头像 + 名字 + 小标签），最后一个 + 邀请；点 / 长按一个人弹菜单 */
 .grp-member-grid { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 12px 6px; }

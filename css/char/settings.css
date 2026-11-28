@@ -344,19 +344,21 @@
 
 .wb-arrow.open { transform: rotate(90deg); }
 
-.wb-content {
-  overflow: hidden;
-  max-height: 0;
-  transition: max-height 0.30s cubic-bezier(0.4,0,0.2,1);
-}
-
+.wb-content { display: none; }
 .wb-content.open {
-  max-height: min(300px, 46vh);
+  display: block;
+  max-height: min(55vh, 420px);
   overflow-y: auto;   /* 世界书多的时候在里面上下滑（以前滑不动、显示不全，用户反馈过） */
   overscroll-behavior: contain;
   -webkit-overflow-scrolling: touch;
   border-top: 1px solid rgba(0,0,0,0.045);
+  padding: 6px 8px 8px;
 }
+.wb-view-row, .wb-view-hint { flex-shrink: 0; }
+.wb-book-list { display: flex; flex-direction: column; }
+.wb-link-pending { display: flex; align-items: flex-start; gap: 8px; padding: 6px 8px 8px; font-size: 12.5px; color: #b0506a; }
+.wb-link-pending label { display: flex; align-items: flex-start; gap: 8px; cursor: pointer; }
+.wb-link-pending input { margin-top: 2px; accent-color: #c06080; }
 
 .wb-empty-hint {
   padding: 16px;

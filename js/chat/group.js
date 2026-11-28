@@ -8,6 +8,14 @@ function groupLabel(c) { return c.charAlias || c.charName || (c.builtinAssistant
 // 群昵称（参考别的小手机，用户同意的）：同一个角色在这个群里叫什么；没改过就是平时的名字
 function groupNick(g, c) { return (g && g.groupCfg && g.groupCfg.nicks && g.groupCfg.nicks[c.id]) || groupLabel(c); }
 function groupHonor(g, c) { var t = g && c && g.groupCfg && g.groupCfg.titles && g.groupCfg.titles[c.id]; return t ? String(t).trim() : ''; }
+var GRP_HONOR_COLORS = ['#FFF0F5', '#EEF0FF', '#F0F5F2', '#F3F0FA', '#FAF6EE', '#F2F2F2', '#EEF7EE'];
+function groupHonorColor(g, c) {
+  var col = g && c && g.groupCfg && g.groupCfg.titleColors && g.groupCfg.titleColors[c.id];
+  col = col ? String(col).toLowerCase() : '';
+  for (var i = 0; i < GRP_HONOR_COLORS.length; i++) if (GRP_HONOR_COLORS[i].toLowerCase() === col) return GRP_HONOR_COLORS[i];
+  return GRP_HONOR_COLORS[0];
+}
+function honorTagPaint(el, hex) { if (!el || !hex) return; el.style.background = hex; el.style.color = '#6a5962'; }
 function groupChatCfg(g) { return Object.assign({}, DEFAULT_CHAT_CFG, (g && g.chatCfg) || {}); }
 function groupPatOn(g) { return !!groupChatCfg(g).patOn; }
 function groupMembers(g) {
@@ -141,10 +149,24 @@ function buildGroupMsgs(g, history, preview) {
     var cross = crossSceneContext(gi, isDrama);
     if (cross) msgs.push({ role: 'system', content: groupFill(g, cross) });
   }
-  // 记录：最近的，按 token 裁掉更早的；角色的话写成「名字：内容」，同一轮连着的合在一起
-  var hist = history.slice(-80), total = 0, from = hist.length;
-  while (from > 0 && total < 16000) { from--; total += msgTokens(hist[from]); }
-  hist = hist.slice(total >= 16000 ? from + 1 : from);
+  // 记录：按这个群的记忆范围和上下文上限裁；角色的话写成「名字：内容」
+  var cc = groupChatCfg(g);
+  var allRounds = typeof splitRounds === 'function' ? splitRounds(history) : [history];
+  var rounds = allRounds.slice(-Math.max(1, cc.maxMem || 50));
+  if (cc.ctxTokens > 0) {
+    var tok = 0;
+    rounds.forEach(function(r) { r.forEach(function(m) { tok += msgTokens(m); }); });
+    while (rounds.length > 1 && tok > cc.ctxTokens) {
+      rounds[0].forEach(function(m) { tok -= msgTokens(m); });
+      rounds.shift();
+    }
+  }
+  if (!isDrama && typeof chatSummariesForPrompt === 'function') {
+    var sums = chatSummariesForPrompt(g, allRounds, allRounds.length - rounds.length);
+    if (sums.length) msgs.push({ role: 'system', content: groupFill(g, '【记忆总结】以下是这个群之前的聊天经过：\n' + sums.join('\n')) });
+  }
+  if (rounds.length > cc.attention) msgs.push({ role: 'system', content: groupFill(g, '【注意力】下面的记录里，重点看最近 ' + cc.attention + ' 个回合；更早的只作背景。') });
+  var hist = [].concat.apply([], rounds);
   var richFrom = Math.max(0, hist.length - 20), out = [];
   hist.forEach(function(m, i) {
     if (m.role === 'assistant') {
@@ -168,7 +190,8 @@ function groupNowContext(g, hist) {
   var c = groupChatCfg(g);
   if (!c.timeOn) return '';
   var now = Date.now(), mine = typeof zoneTimeText === 'function' ? zoneTimeText(now) : groupNowText();
-  var lines = ['现在是 ' + mine + '。'];
+  var theirs = c.timeZone && typeof zoneTimeText === 'function' ? zoneTimeText(now, c.timeZone) : mine;
+  var lines = [theirs !== mine && typeof zoneLabel === 'function' ? '群里的时间（' + zoneLabel(c.timeZone) + '）现在是 ' + theirs + '；{{user}}那边是 ' + mine + '。' : '现在是 ' + mine + '。'];
   var lastT = 0;
   (hist || []).forEach(function(m) { if (m && m.time && !m.action && (m.content || m.pat || m.play || m.game)) lastT = m.time; });
   if (lastT && now - lastT >= 10 * 60000) lines.push('距离群里上一条消息已经过去了 ' + durText(now - lastT) + '。');
@@ -238,19 +261,25 @@ function groupModTag(g, actorId, kind, attrs) {
 }
 function groupDramaRules(g) {
   var names = groupMembers(g).map(groupLabel);
+  var cc = groupChatCfg(g);
+  var langLine = cc.lang ? '这一幕用' + cc.lang + '写。' : '';
+  var trLine = cc.translate ? '外语对白后另起一行，以「〔译〕」开头给出中文翻译。' : '';
   var illus = (typeof imgUse === 'function' && imgUse('drama') === 'gen')
     ? '再另起一行写 <配图>用一两句话描述这一幕的画面</配图>，这一行也不会显示出来。' : '';
   return [{ role: 'system', content: groupFill(g,
-    '【群剧情的写法】接着这一幕往下写，四百到八百字，有画面。群里是 ' + names.join('、') + '，每人按自己的人设和口吻，可以互相接话，但不是每个人每幕都要开口。对话放在引号里，点明是谁说的。不要用「名字：」这种聊天格式，不要写投票、红包、抽奖、悄悄话、禁言。不替{{user}}说话，不写{{user}}的内心。' +
+    '【群剧情的写法】接着这一幕往下写，四百到八百字，有画面。群里是 ' + names.join('、') + '，每人按自己的人设和口吻，可以互相接话，但不是每个人每幕都要开口。对话放在引号里，点明是谁说的。不要用「名字：」这种聊天格式，不要写投票、红包、抽奖、悄悄话、禁言。不替{{user}}说话，不写{{user}}的内心。' + langLine + trLine +
     '在回复的最后另起一行写 <前情>用一句话概括这一幕（30 字以内，第三人称，写清楚谁做了什么）</前情>。这一行不会显示出来。' + illus) }];
 }
 function groupFormatRules(g) {
   var names = groupSpeakers(g).map(groupLabel);   // 被禁言的不能说话
+  var cc = groupChatCfg(g);
+  var langLine = cc.lang ? '这个群里大家用' + cc.lang + '说话。' : '';
+  var trLine = cc.translate ? '每条消息的外语正文后另起一行，以「〔译〕」开头给出中文翻译。' : '';
   return [{ role: 'system', content: groupFill(g,
     '【群聊回复格式】接着群里的聊天往下说：不是每个人每次都要开口，谁会接这个话题谁就说，一共 ' + groupReplyN(g) + ' 条，像真的群聊一样有来有回、有人插话。' +
     '每条单独一行，开头写说话人的名字和冒号（名字只能是：' + names.join('、') + '），比如：\n' +
     names.slice(0, 2).map(function(n, i) { return n + '：' + (i ? '我在我在！' : '在吗。'); }).join('\n') +
-    '\n' + (typeof gpTagRule === 'function' ? gpTagRule() : '') + groupModRule(g) + groupWhisperRule(g) + (groupPatOn(g) ? '\n有人拍了拍某个成员时，被拍的人若想回拍，在自己那一行写 <拍一拍/>，表示拍了拍{{user}}。很少用，不要每轮都拍。' : '') + '\n骰子和猜拳按自己的性子决定发不发，不是每个人都要发。想发的人夹在自己的话中间，单独一行写 <骰子/> 或 <猜拳/>，小手机会给这个人随机一个结果。不要自己写点数，也不要写自己出了石头、剪刀或布。\n同一个人连着说几句可以写在一行里，每句照常写标点，小手机会按句子分成气泡。像平时发微信一样说话，口语、短句；' + (groupActionOn(g) ? '想写动作、神态时用 *星号* 包起来放在那个人那一行里（会显示成灰色小字），不写旁白和括号说明' : '不写旁白、动作描写和括号说明') + '，不替{{user}}说话。') }];
+    '\n' + (typeof gpTagRule === 'function' ? gpTagRule() : '') + groupModRule(g) + groupWhisperRule(g) + (groupPatOn(g) ? '\n有人拍了拍某个成员时，被拍的人若想回拍，在自己那一行写 <拍一拍/>，表示拍了拍{{user}}。很少用，不要每轮都拍。' : '') + '\n骰子和猜拳按自己的性子决定发不发，不是每个人都要发。想发的人夹在自己的话中间，单独一行写 <骰子/> 或 <猜拳/>，小手机会给这个人随机一个结果。不要自己写点数，也不要写自己出了石头、剪刀或布。\n同一个人连着说几句可以写在一行里，每句照常写标点，小手机会按句子分成气泡。像平时发微信一样说话，口语、短句；' + (groupActionOn(g) ? '想写动作、神态时用 *星号* 包起来放在那个人那一行里（会显示成灰色小字），不写旁白和括号说明' : '不写旁白、动作描写和括号说明') + '，不替{{user}}说话。' + langLine + trLine) }];
 }
 
 // ---------- 成员各用自己的模型（群设置里开，参考别的小手机）：一个个人单独问一遍，后面的人看得到前面的人刚说了什么 ----------
@@ -468,11 +497,52 @@ function grpPaintGap() {
   });
   document.getElementById('grpAutoMore').style.display = document.getElementById('grpAutoOn').checked ? '' : 'none';
 }
+var grpWbParts = null, grpWbView = 'chat', grpWbOpen = {};
+function grpPaintWb() {
+  var wrap = document.getElementById('grpWbContent');
+  if (!wrap || !grpWbParts || typeof paintWbBooks !== 'function') return;
+  var top = wrap.scrollTop;
+  var tabs = wrap.querySelector('.wb-view-row');
+  if (!tabs || tabs.dataset.view !== grpWbView) {
+    wrap.innerHTML = '';
+    tabs = document.createElement('div');
+    tabs.className = 'pf-radio-row wb-view-row';
+    tabs.dataset.view = grpWbView;
+    [['chat', '聊天窗口'], ['drama', '剧情窗口']].forEach(function(t) {
+      var b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'pf-radio-btn' + (grpWbView === t[0] ? ' selected' : '');
+      b.textContent = t[1];
+      b.addEventListener('click', function(e) {
+        e.stopPropagation();
+        if (grpWbView === t[0]) return;
+        grpWbView = t[0];
+        grpPaintWb();
+      });
+      tabs.appendChild(b);
+    });
+    wrap.appendChild(tabs);
+    var tip = document.createElement('div');
+    tip.className = 'auto-hint wb-view-hint';
+    tip.textContent = grpWbView === 'chat' ? '在这个群的聊天窗口里用的世界书' : '在这个群的剧情窗口里用的世界书';
+    wrap.appendChild(tip);
+  }
+  paintWbBooks(wrap, grpWbParts[grpWbView], grpWbOpen, function(next) {
+    grpWbParts[grpWbView] = next;
+    grpPaintWb();
+  });
+  wrap.scrollTop = top;
+  var chatN = grpWbParts.chat.ids.length + grpWbParts.chat.folders.length;
+  var dramaN = grpWbParts.drama.ids.length + grpWbParts.drama.folders.length;
+  document.getElementById('grpWbCount').textContent = '聊天 ' + chatN + ' · 剧情 ' + dramaN;
+}
 function openGroupSetting(g) {
   var cfg = groupCfgOf(g);
   grpEdit = { g: g, picked: (g.members || []).slice(), knows: Object.assign({}, cfg.knows), avImg: g.charAvatar || '', gap: cfg.autoGapH,
               replyN: cfg.replyN || 'mid',
-              bg: Object.assign({}, DEFAULT_CHAT_BG, g.chatBg || {}), bubble: Object.assign({}, DEFAULT_BUBBLE, g.bubble || {}) };
+              bg: Object.assign({}, DEFAULT_CHAT_BG, g.chatBg || {}), bubble: Object.assign({}, DEFAULT_BUBBLE, g.bubble || {}),
+              look: Object.assign({}, DEFAULT_LOOK, g.look || {}),
+              drama: g.dramaLook ? JSON.parse(JSON.stringify(g.dramaLook)) : null };
   document.getElementById('grpName').value = g.charName || '';
   document.getElementById('grpNotice').value = cfg.notice || '';
   document.getElementById('grpAutoOn').checked = !!cfg.autoOn;
@@ -481,12 +551,31 @@ function openGroupSetting(g) {
   document.getElementById('grpPatOn').checked = !!cc.patOn;
   document.getElementById('grpPatSuffix').value = cc.patSuffix || '';
   document.getElementById('grpTimeOn').checked = !!cc.timeOn;
+  document.getElementById('grpTimeZone').value = cc.timeZone || '';
+  document.getElementById('grpLang').value = cc.lang || '';
+  document.getElementById('grpTranslate').checked = !!cc.translate;
+  document.getElementById('grpMemMax').value = cc.maxMem;
+  document.getElementById('grpMemAttention').value = cc.attention;
+  document.getElementById('grpCtxTokens').value = cc.ctxTokens;
+  document.getElementById('grpAutoSum').checked = !!cc.autoSum;
+  document.getElementById('grpSumEvery').value = cc.sumEvery;
+  document.getElementById('grpAutoSumSub').classList.toggle('open', !!cc.autoSum);
   document.getElementById('grpQuickBar').checked = !!cc.quickBar;
   document.getElementById('grpWhisper').checked = !!cfg.whisper;
   document.getElementById('grpSolo').checked = !!cfg.solo;
-  document.getElementById('grpShowAv').checked = !(g.look && g.look.showAvatar === false);
+  document.getElementById('grpShowAv').checked = grpEdit.look.showAvatar !== false;
+  document.getElementById('grpHeadAv').checked = !!grpEdit.look.headAvatar;
   document.getElementById('grpCss').value = g.customCss || '';
+  document.getElementById('grpDramaCss').value = (g.dramaLook && g.dramaLook.customCss) || '';
+  if (typeof renderMemSummaries === 'function') renderMemSummaries(g, 'grpSumList');
   document.getElementById('grpOpacity').value = grpEdit.bubble.opacity;
+  grpWbView = 'chat';
+  grpWbOpen = {};
+  grpWbParts = {
+    chat: { ids: (g.worldbookIds || []).slice(), folders: (g.worldbookFolders || []).slice() },
+    drama: g.dramaWb ? { ids: (g.dramaWb.ids || []).slice(), folders: (g.dramaWb.folders || []).slice() } : { ids: [], folders: [] }
+  };
+  grpPaintWb();
   grpPaintMembers(); grpPaintKnows(); grpPaintAv(); grpPaintGap(); grpPaintBasic(); grpPaintLook();
   grpGoPage(0, false);
   appGroupSetting.querySelector('.settings-content').scrollTop = 0;
@@ -506,9 +595,27 @@ function grpOptRow(box, opts, cur, onPick) {
 var GROUP_REPLY_N = { few: [2, 4, '少一点'], mid: [3, 6, '适中'], many: [5, 10, '热闹'] };
 function grpPaintBasic() {
   var e = grpEdit;
-  grpOptRow(document.getElementById('grpReplyN'), Object.keys(GROUP_REPLY_N).map(function(k) { var n = GROUP_REPLY_N[k]; return [k, n[2] + '（' + n[0] + '～' + n[1] + '）']; }), e.replyN, function(v) { e.replyN = v; grpPaintBasic(); });
+  grpOptRow(document.getElementById('grpReplyN'), Object.keys(GROUP_REPLY_N).map(function(k) { var n = GROUP_REPLY_N[k]; return [k, n[2] + ' ' + n[0] + '～' + n[1]]; }), e.replyN, function(v) { e.replyN = v; grpPaintBasic(); });
 }
-var GROUP_BG_COLORS = ['#FFF0F5', '#F3F0FF', '#EEF5FF', '#F2FAF5', '#FFFFFF', '#F2F2F2'];
+var GROUP_BG_COLORS = ['#FFF0F5', '#EEF0FF', '#F0F5F2', '#F3F0FA', '#FAF6EE', '#F2F2F2', '#EEF7EE'];
+var grpBubbleTplStyle = document.createElement('style');
+document.head.appendChild(grpBubbleTplStyle);
+function grpBubbleTplCss() {
+  if (!grpEdit || typeof lookCss !== 'function') return;
+  var b = grpEdit.bubble;
+  var css = '';
+  document.querySelectorAll('#grpBubbleTpl .bubble-tpl').forEach(function(c) {
+    css += lookCss({ bubble: { preset: b.preset, opacity: b.opacity, effect: 'none', tpl: c.dataset.v }, look: { format: 'bubble', showAvatar: false } }, '#gtpl-' + c.dataset.v);
+  });
+  grpBubbleTplStyle.textContent = css;
+}
+function grpSliderThumb() {
+  var sl = document.getElementById('grpOpacity'), th = document.getElementById('grpSliderThumb');
+  if (!sl || !th) return;
+  var val = parseInt(sl.value, 10) || 0;
+  document.getElementById('grpOpacityVal').textContent = val + '%';
+  th.style.left = (val / 100 * sl.offsetWidth) + 'px';
+}
 function grpPaintLook() {
   var e = grpEdit;
   var prev = document.getElementById('grpBgPrev');
@@ -516,26 +623,137 @@ function grpPaintLook() {
   var colors = document.getElementById('grpBgColors');
   colors.innerHTML = '';
   GROUP_BG_COLORS.forEach(function(c) {
-    var d = document.createElement('span');
-    d.className = 'grp-dot' + (!e.bg.image && e.bg.color === c ? ' on' : '');
+    var d = document.createElement('div');
+    d.className = 'chat-bg-swatch' + (!e.bg.image && (e.bg.color || DEFAULT_CHAT_BG.color) === c ? ' selected' : '');
     d.style.background = c;
     d.addEventListener('click', function() { e.bg = { color: c, image: '' }; grpPaintLook(); });
     colors.appendChild(d);
   });
-  var bc = document.getElementById('grpBubbleColors');
-  bc.innerHTML = '';
-  BUBBLE_PRESETS.forEach(function(pair, i) {
-    var d = document.createElement('span');
-    d.className = 'grp-pair' + (e.bubble.preset === i ? ' on' : '');
-    d.innerHTML = '<i></i><i></i>';
-    d.children[0].style.background = pair[0]; d.children[1].style.background = pair[1];
-    d.addEventListener('click', function() { e.bubble.preset = i; grpPaintLook(); });
-    bc.appendChild(d);
+  document.querySelectorAll('#grpBubbleColors .bubble-preset-item').forEach(function(el) {
+    el.classList.toggle('selected', parseInt(el.dataset.preset, 10) === e.bubble.preset);
   });
-  grpOptRow(document.getElementById('grpBubbleTpl'), BUBBLE_TPLS.filter(function(t) { return t.id === 'plain' || (t.chat && !/^siya/.test(t.id)); })   /* 群里不放仿siya（用户要的） */.map(function(t) { return [t.id, t.name]; }), e.bubble.tpl || 'plain', function(v) { e.bubble.tpl = v; grpPaintLook(); });
-  document.getElementById('grpOpacityVal').textContent = e.bubble.opacity + '%';
+  document.querySelectorAll('#grpBubbleEffect .bubble-effect-chip').forEach(function(el) {
+    el.classList.toggle('selected', el.dataset.effect === (e.bubble.effect || 'none'));
+  });
+  var row = document.getElementById('grpBubbleTpl');
+  var tpl = e.bubble.tpl || 'plain';
+  if (/^siya/.test(tpl)) tpl = 'plain';
+  row.innerHTML = '';
+  BUBBLE_TPLS.filter(function(t) { return t.id === 'plain' || (t.chat && !/^siya/.test(t.id)); }).forEach(function(t) {
+    var c = document.createElement('div');
+    c.className = 'bubble-tpl' + (t.id === tpl ? ' selected' : '');
+    c.id = 'gtpl-' + t.id;
+    c.dataset.v = t.id;
+    c.innerHTML = '<div class="btpl-box"><div class="chat-msg-row ai"><div class="chat-msg-bubble">嗨</div></div><div class="chat-msg-row user"><div class="chat-msg-bubble">在呢</div></div></div><b></b>';
+    c.querySelector('b').textContent = t.name;
+    c.addEventListener('click', function() {
+      e.bubble.tpl = t.id;
+      row.querySelectorAll('.bubble-tpl').forEach(function(x) { x.classList.toggle('selected', x === c); });
+      document.getElementById('grpBubbleTplHint').textContent = t.desc || '';
+    });
+    row.appendChild(c);
+  });
+  var cur = BUBBLE_TPLS.filter(function(t) { return t.id === tpl; })[0];
+  document.getElementById('grpBubbleTplHint').textContent = cur && cur.desc ? cur.desc : '';
+  grpBubbleTplCss();
+  var sl = document.getElementById('grpOpacity');
+  if (document.activeElement !== sl) sl.value = e.bubble.opacity;
+  grpSliderThumb();
+  grpOptRow(document.getElementById('grpHeadAlign'), [['center', '居中'], ['left', '居左']], e.look.headAlign || 'center', function(v) { e.look.headAlign = v; grpPaintLook(); });
+  var dl = e.drama && e.drama.look || {};
+  var dfmt = dl.format === 'text' ? 'box' : (dl.format || 'bubble');
+  grpOptRow(document.getElementById('grpDramaFormat'), [['bubble', '气泡'], ['box', '文本框'], ['custom', '自定义']], dfmt, function(v) { grpEnsureDrama().look.format = v; grpPaintLook(); });
+  document.getElementById('grpDramaBox').style.display = dfmt === 'bubble' ? 'none' : '';
+  grpOptRow(document.getElementById('grpDramaLayout'), [['center', '居中'], ['side', '左右'], ['left', '左对齐']], dl.boxLayout || 'side', function(v) { grpEnsureDrama().look.boxLayout = v; grpPaintLook(); });
+  grpOptRow(document.getElementById('grpDramaStyle'), (typeof DRAMA_BOX_STYLES !== 'undefined' ? DRAMA_BOX_STYLES : []).map(function(s) { return [s.id, s.name]; }), dl.boxStyle || 'soft', function(v) { grpEnsureDrama().look.boxStyle = v; grpPaintLook(); });
+  document.getElementById('grpDramaMeta').checked = dl.boxMeta !== false;
+  document.getElementById('grpDramaActs').checked = dl.boxActs !== false;
 }
-document.getElementById('grpOpacity').addEventListener('input', function() { if (grpEdit) { grpEdit.bubble.opacity = parseInt(this.value, 10); grpPaintLook(); } });
+function grpEnsureDrama() {
+  var e = grpEdit;
+  if (!e.drama) e.drama = { chatBg: Object.assign({}, e.bg), bubble: Object.assign({}, e.bubble), look: Object.assign({}, DEFAULT_LOOK, e.look), customCss: '' };
+  e.drama.look = Object.assign({}, DEFAULT_LOOK, e.drama.look || {});
+  return e.drama;
+}
+document.getElementById('grpOpacity').addEventListener('input', function() {
+  if (!grpEdit) return;
+  grpEdit.bubble.opacity = parseInt(this.value, 10);
+  grpSliderThumb();
+  grpBubbleTplCss();
+});
+document.querySelectorAll('#grpBubbleColors .bubble-preset-item').forEach(function(el) {
+  el.addEventListener('click', function() {
+    if (!grpEdit) return;
+    grpEdit.bubble.preset = parseInt(this.dataset.preset, 10);
+    grpPaintLook();
+  });
+});
+document.querySelectorAll('#grpBubbleEffect .bubble-effect-chip').forEach(function(el) {
+  el.addEventListener('click', function() {
+    if (!grpEdit) return;
+    grpEdit.bubble.effect = this.dataset.effect;
+    grpPaintLook();
+  });
+});
+document.getElementById('grpAutoSum').addEventListener('change', function() {
+  document.getElementById('grpAutoSumSub').classList.toggle('open', this.checked);
+});
+document.getElementById('grpDramaMeta').addEventListener('change', function() { if (grpEdit) grpEnsureDrama().look.boxMeta = this.checked; });
+document.getElementById('grpDramaActs').addEventListener('change', function() { if (grpEdit) grpEnsureDrama().look.boxActs = this.checked; });
+document.getElementById('grpDramaCss').addEventListener('input', function() { if (grpEdit) grpEnsureDrama().customCss = this.value; });
+document.getElementById('grpSumNow').addEventListener('click', function() {
+  var g = grpEdit && grpEdit.g, btn = this;
+  if (!g || typeof summarizeRounds !== 'function') return;
+  var idx = findCharIdx(g.id);
+  var total = splitRounds(getChatHistory(idx)).length;
+  var upTo = getCharMemory(g).upTo || 0;
+  if (total <= upTo) { showToast('没有需要总结的新内容', 'success'); return; }
+  btn.disabled = true;
+  btn.textContent = '总结中…';
+  summarizeRounds(idx, upTo, total)
+    .then(function() { showToast('✓ 已生成总结', 'success'); renderMemSummaries(g, 'grpSumList'); })
+    .catch(function(err) { showToast('✗ ' + err.message, 'error'); })
+    .then(function() { btn.disabled = false; btn.textContent = '立即总结'; });
+});
+document.getElementById('grpLookExport').addEventListener('click', function() {
+  var e = grpEdit;
+  if (!e) return;
+  var out = { app: 'mphone', type: 'look', version: 1, name: document.getElementById('grpName').value.trim() };
+  out.chat = { chatBg: e.bg, bubble: e.bubble, look: Object.assign({}, DEFAULT_LOOK, e.look || {}, {
+    showAvatar: document.getElementById('grpShowAv').checked, headAvatar: document.getElementById('grpHeadAv').checked
+  }), customCss: document.getElementById('grpCss').value };
+  if (e.drama) out.drama = e.drama;
+  var json = JSON.stringify(out), base = '眠花糖机美化' + (out.name ? '_' + out.name : '');
+  downloadBlob(new Blob([json], { type: 'application/json' }), base + '.json');
+});
+document.getElementById('grpLookImport').addEventListener('click', function() {
+  var f = document.getElementById('grpLookFile');
+  f.value = '';
+  f.click();
+});
+document.getElementById('grpLookFile').addEventListener('change', function() {
+  var file = this.files && this.files[0];
+  if (!file || !grpEdit) return;
+  file.text().then(function(t) {
+    var d = parseImportedJson(t);
+    if (!d || d.app !== 'mphone' || d.type !== 'look') throw new Error('not look');
+    if (d.chat) {
+      if (d.chat.chatBg) grpEdit.bg = Object.assign({}, DEFAULT_CHAT_BG, d.chat.chatBg);
+      if (d.chat.bubble) grpEdit.bubble = Object.assign({}, DEFAULT_BUBBLE, d.chat.bubble);
+      if (d.chat.look) grpEdit.look = Object.assign({}, DEFAULT_LOOK, d.chat.look);
+      if (typeof d.chat.customCss === 'string') document.getElementById('grpCss').value = d.chat.customCss;
+    }
+    if (d.drama && Object.keys(d.drama).length) {
+      grpEdit.drama = JSON.parse(JSON.stringify(d.drama));
+      document.getElementById('grpDramaCss').value = grpEdit.drama.customCss || '';
+    }
+    document.getElementById('grpShowAv').checked = grpEdit.look.showAvatar !== false;
+    document.getElementById('grpHeadAv').checked = !!grpEdit.look.headAvatar;
+    grpPaintLook();
+    showToast(d.status ? '✓ 已套上。群没有状态栏，那一项跳过了，点保存才写入' : '✓ 已套上，点保存才写入', 'success');
+  }).catch(function() { showToast('✗ 这不是眠花糖机的美化文件', 'error'); });
+});
+if (typeof mountCssPresets === 'function') { mountCssPresets('grpCss'); mountCssPresets('grpDramaCss'); }
 document.getElementById('grpBgImg').addEventListener('click', function() {
   if (!grpEdit) return;
   openImgPicker(function(src) { grpEdit.bg = { color: grpEdit.bg.color, image: src }; grpPaintLook(); },
@@ -553,6 +771,7 @@ function grpGoPage(i, smooth) {
   if (smooth === false) { grpPages.style.scrollBehavior = 'auto'; grpPages.scrollLeft = i * grpPages.clientWidth; grpPages.style.scrollBehavior = ''; }
   else grpPages.scrollTo({ left: i * grpPages.clientWidth, behavior: 'smooth' });
   grpSetTab(i, smooth !== false);
+  if (i === 2) requestAnimationFrame(grpSliderThumb);
 }
 document.querySelectorAll('#grpTabs .cs-tab').forEach(function(t) { t.addEventListener('click', function() { grpGoPage(+this.dataset.page); }); });
 grpPages.addEventListener('scroll', function() { grpSetTab(grpPages.scrollLeft / Math.max(1, grpPages.clientWidth), false); });
@@ -592,6 +811,7 @@ function grpPaintMembers() {
     var mute = groupMuteUntil(g, c.id), admin = groupAdmins(g).indexOf(c.id) >= 0, honor = groupHonor(g, c);
     var t = tile(av, groupNick(g, c), mute ? '禁言中' : honor ? honor : admin ? '管理员' : '', function() { grpMemberMenu(g, c); });
     if (mute) t.classList.add('muted');
+    else if (honor) { var tagEl = t.querySelector('.grp-mem-tag'); if (tagEl) { tagEl.style.background = groupHonorColor(g, c); tagEl.style.color = '#fff'; } }
   });
   var add = document.createElement('div'); add.className = 'grp-mem-av grp-mem-add'; add.textContent = '+';
   tile(add, '邀请', '', function() { grpInvite(g); });
@@ -698,18 +918,31 @@ function grpMemberMenu(g, c) {
   if (mute) item('解除禁言（还剩 ' + groupMuteLeft(mute) + '）', function() { groupSetMute(g, null, c.id, 0); });
   else item('禁言', function() { grpMuteTime(g, c); });
   item('改头衔', function() {
-    var ov2 = groupModal('<div class="mine-acc-title"></div><input class="pet-edit-input" maxlength="6" placeholder="比如：团宠、夜猫子。空着就去掉">' +
+    var ov2 = groupModal('<div class="mine-acc-title"></div><div class="chat-bg-swatches grp-honor-swatches"></div><input class="pet-edit-input" maxlength="6" placeholder="比如：团宠、夜猫子。空着就去掉">' +
       '<div class="mine-acc-actions"><button class="mine-acc-btn mine-acc-btn-close" data-act="cancel">取消</button><button class="mine-acc-btn mine-acc-btn-add" data-act="ok">好了</button></div>');
     ov2.querySelector('.mine-acc-title').textContent = '「' + name + '」的头衔';
     var inp = ov2.querySelector('input');
     inp.value = groupHonor(g, c);
+    var picked = groupHonorColor(g, c), row = ov2.querySelector('.grp-honor-swatches');
+    GRP_HONOR_COLORS.forEach(function(hex) {
+      var s = document.createElement('div');
+      s.className = 'chat-bg-swatch' + (hex.toLowerCase() === picked.toLowerCase() ? ' selected' : '');
+      s.style.background = hex;
+      s.addEventListener('click', function() {
+        picked = hex;
+        row.querySelectorAll('.chat-bg-swatch').forEach(function(el) { el.classList.toggle('selected', el === s); });
+      });
+      row.appendChild(s);
+    });
     ov2.querySelector('[data-act="cancel"]').addEventListener('click', function() { ov2.remove(); });
     ov2.querySelector('[data-act="ok"]').addEventListener('click', function() {
       var v = inp.value.trim().slice(0, 6), titles = Object.assign({}, (g.groupCfg && g.groupCfg.titles) || {});
-      if (v) titles[c.id] = v; else delete titles[c.id];
+      var colors = Object.assign({}, (g.groupCfg && g.groupCfg.titleColors) || {});
+      if (v) { titles[c.id] = v; colors[c.id] = picked; } else { delete titles[c.id]; delete colors[c.id]; }
       ov2.remove();
-      grpSaveCfg(g, { titles: titles });
+      grpSaveCfg(g, { titles: titles, titleColors: colors });
       grpAfterMemberChange(g);
+      if (charList[openingChatCharIdx] === g && typeof renderRoomLists === 'function') renderRoomLists(openingChatCharIdx);
     });
     setTimeout(function() { inp.focus(); }, 50);
   });
@@ -749,6 +982,11 @@ function grpAfterMemberChange(g) {
 }
 function closeGroupSetting() { appGroupSetting.classList.remove('active'); grpEdit = null; }
 document.getElementById('backGroupSetting').addEventListener('click', closeGroupSetting);
+document.getElementById('grpWbHeader').addEventListener('click', function() {
+  var box = document.getElementById('grpWbContent');
+  var open = box.classList.toggle('open');
+  document.getElementById('grpWbArrow').classList.toggle('open', open);
+});
 document.getElementById('grpAutoOn').addEventListener('change', grpPaintGap);
 document.getElementById('grpAvatarBox').addEventListener('click', function() {
   if (!grpEdit) return;
@@ -771,12 +1009,42 @@ document.getElementById('groupSaveBtn').addEventListener('click', function() {
     quickBar: document.getElementById('grpQuickBar').checked,
     patOn: document.getElementById('grpPatOn').checked,
     patSuffix: document.getElementById('grpPatSuffix').value.trim().slice(0, 8),
-    timeOn: document.getElementById('grpTimeOn').checked
+    timeOn: document.getElementById('grpTimeOn').checked,
+    timeZone: document.getElementById('grpTimeZone').value,
+    lang: document.getElementById('grpLang').value.trim().slice(0, 20),
+    translate: document.getElementById('grpTranslate').checked,
+    maxMem: Math.max(1, parseInt(document.getElementById('grpMemMax').value, 10) || 50),
+    attention: Math.max(1, parseInt(document.getElementById('grpMemAttention').value, 10) || 10),
+    ctxTokens: Math.max(0, parseInt(document.getElementById('grpCtxTokens').value, 10) || 0),
+    autoSum: document.getElementById('grpAutoSum').checked,
+    sumEvery: Math.max(1, parseInt(document.getElementById('grpSumEvery').value, 10) || 10)
   });
   g.chatBg = e.bg;
   g.bubble = e.bubble;
-  g.look = Object.assign({}, g.look || {}, { showAvatar: document.getElementById('grpShowAv').checked });
+  g.look = Object.assign({}, g.look || {}, e.look || {}, {
+    showAvatar: document.getElementById('grpShowAv').checked,
+    headAvatar: document.getElementById('grpHeadAv').checked
+  });
   g.customCss = document.getElementById('grpCss').value;
+  if (grpWbParts) {
+    g.worldbookIds = (grpWbParts.chat.ids || []).slice();
+    g.worldbookFolders = (grpWbParts.chat.folders || []).slice();
+    g.dramaWb = { ids: (grpWbParts.drama.ids || []).slice(), folders: (grpWbParts.drama.folders || []).slice() };
+  }
+  if (e.drama) {
+    e.drama.look = Object.assign({}, e.drama.look || {}, {
+      format: (e.drama.look && e.drama.look.format) || 'bubble',
+      boxMeta: document.getElementById('grpDramaMeta').checked,
+      boxActs: document.getElementById('grpDramaActs').checked,
+      showAvatar: g.look.showAvatar,
+      headAvatar: g.look.headAvatar,
+      headAlign: g.look.headAlign
+    });
+    e.drama.customCss = document.getElementById('grpDramaCss').value;
+    e.drama.chatBg = Object.assign({}, e.bg);
+    e.drama.bubble = Object.assign({}, e.bubble);
+    g.dramaLook = e.drama;
+  }
   saveCharList();
   closeGroupSetting();
   if (charList[openingChatCharIdx] === g) { chatRoomTitle.textContent = groupTitle(g); applyChatRoomStyle(g); renderRoomLists(openingChatCharIdx); }

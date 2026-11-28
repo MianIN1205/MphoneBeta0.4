@@ -434,6 +434,72 @@ renderWbList();
 
 // 取出某角色当前应注入的世界书条目：已关联（整个文件夹或单个条目）且（无关键词 或 最近 6 条消息里出现任一关键词）
 // drama：剧情窗口用「剧情窗口」那栏的关联（角色设置里分开勾的；没单独设置过就不关联）
+// 整本 / 单条的勾选，和扩展栏是同一套：全选记成文件夹，取消其中一条就改成「除了这条以外都单独勾上」
+function wbPartApply(part, gIds, folderId, allOn, entryId) {
+  var folders = ((part && part.folders) || []).slice();
+  var ids = ((part && part.ids) || []).slice();
+  var fOn = folders.indexOf(folderId) >= 0;
+  var rest = function(list) { return list.filter(function(id) { return gIds.indexOf(id) < 0; }); };
+  if (entryId == null) return { ids: rest(ids), folders: folders.filter(function(id) { return id !== folderId; }).concat(allOn ? [] : [folderId]) };
+  if (fOn) return { folders: folders.filter(function(id) { return id !== folderId; }), ids: rest(ids).concat(gIds.filter(function(id) { return id !== entryId; })) };
+  var on = ids.indexOf(entryId) >= 0;
+  ids = on ? ids.filter(function(id) { return id !== entryId; }) : ids.concat([entryId]);
+  if (gIds.length && gIds.every(function(id) { return ids.indexOf(id) >= 0; })) {
+    return { ids: rest(ids), folders: folders.indexOf(folderId) < 0 ? folders.concat([folderId]) : folders };
+  }
+  return { ids: ids, folders: folders };
+}
+function paintWbBooks(wrap, part, openMap, onChange) {
+  part = part || { ids: [], folders: [] };
+  var groups = typeof wbGroups === 'function' ? wbGroups() : [];
+  var oldList = wrap.querySelector('.wb-book-list');
+  if (oldList) oldList.remove();
+  var oldEmpty = wrap.querySelector('.wb-empty-hint');
+  if (oldEmpty) oldEmpty.remove();
+  if (!groups.length) { wrap.insertAdjacentHTML('beforeend', '<div class="wb-empty-hint">还没有世界书</div>'); return; }
+  var list = document.createElement('div');
+  list.className = 'wb-book-list';
+  wrap.appendChild(list);
+  groups.forEach(function(g) {
+    var pick = g.entries.filter(function(e) { return !e.system; });
+    var gIds = pick.map(function(e) { return e.id; });
+    var fOn = (part.folders || []).indexOf(g.id) >= 0;
+    var nOn = fOn ? gIds.length : gIds.filter(function(id) { return (part.ids || []).indexOf(id) >= 0; }).length;
+    var allOn = !!gIds.length && (fOn || nOn === gIds.length);
+    var opened = !!openMap[g.id];
+    var it = document.createElement('div');
+    it.className = 'cr-qb-item cr-qb-wb-folder' + (allOn ? ' selected' : '') + (nOn && !allOn ? ' part' : '');
+    it.innerHTML = '<span class="cr-qb-item-name"></span><span class="cr-qb-item-sub"></span>';
+    it.querySelector('.cr-qb-item-name').textContent = g.name;
+    it.querySelector('.cr-qb-item-sub').textContent = !gIds.length ? '' : (nOn && !allOn ? nOn + '/' + gIds.length : gIds.length + ' 条');
+    it.addEventListener('click', function() { openMap[g.id] = !openMap[g.id]; onChange(part); });
+    if (gIds.length) {
+      var arrow = document.createElement('button');
+      arrow.type = 'button';
+      arrow.className = 'cr-qb-expand';
+      arrow.textContent = opened ? '收起' : '展开';
+      arrow.addEventListener('click', function(e) { e.stopPropagation(); openMap[g.id] = !openMap[g.id]; onChange(part); });
+      it.appendChild(arrow);
+      var allBtn = document.createElement('button');
+      allBtn.type = 'button';
+      allBtn.className = 'cr-qb-expand' + (allOn ? ' on' : '');
+      allBtn.textContent = allOn ? '取消' : '全选';
+      allBtn.addEventListener('click', function(e) { e.stopPropagation(); onChange(wbPartApply(part, gIds, g.id, allOn, null)); });
+      it.appendChild(allBtn);
+    }
+    list.appendChild(it);
+    if (!opened || !gIds.length) return;
+    pick.forEach(function(en) {
+      var on = fOn || (part.ids || []).indexOf(en.id) >= 0;
+      var sub = document.createElement('div');
+      sub.className = 'cr-qb-item cr-qb-sub' + (on ? ' selected' : '');
+      sub.innerHTML = '<span class="cr-qb-item-name"></span>';
+      sub.querySelector('.cr-qb-item-name').textContent = en.name || '未命名';
+      sub.addEventListener('click', function(e) { e.stopPropagation(); onChange(wbPartApply(part, gIds, g.id, false, en.id)); });
+      list.appendChild(sub);
+    });
+  });
+}
 function charWbOf(char, drama) {
   if (drama) {
     var selection = (char && char.dramaWb) || {};

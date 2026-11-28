@@ -78,6 +78,7 @@ function cssPreviewRoomHtml(a, c) {
   room.classList.toggle('cr-head-left', look.headAlign === 'left');
   room.classList.remove('cr-has-status');
   room.classList.toggle('is-group', !!c.isGroup);
+  room.classList.toggle('no-drama', !!c.builtinAssistant);
   var qb = room.querySelector('#crQuickBar'), inNav = !!tplBgColor(part);
   room.classList.toggle('cr-qb-in-nav', inNav);
   if (qb) {

@@ -23,7 +23,7 @@
 .cr-quote-bar-close { border: none; background: none; color: #bbb; font-size: 13px; cursor: pointer; }
 
 /* 撤回提示 */
-.cr-recall-notice { align-self: center; font-size: 11.5px; color: #6d5962; padding: 2px 0; }
+.cr-recall-notice { align-self: center; font-size: 11.5px; color: #777; padding: 2px 0; }
 .cr-recall-reedit { color: #6a8fc0; margin-left: 6px; cursor: pointer; }
 
 /* =============================================
@@ -343,11 +343,11 @@
    聊天室：时间分隔、加载更早、回复多版本切换、停止生成、查看大图
    ============================================= */
 .cr-time-sep {
-  align-self: center; font-size: 11px; color: #6d5962;
+  align-self: center; font-size: 11px; color: #777;
   padding: 2px 8px; margin: 4px 0; flex-shrink: 0;
 }
 /* 双方各自最后一条消息下面的小时间 */
-.cr-msg-stamp { font-size: 10px; color: #6d5962; margin-top: -8px; flex-shrink: 0; line-height: 1.4; }
+.cr-msg-stamp { font-size: 10px; color: #777; margin-top: -8px; flex-shrink: 0; line-height: 1.4; }
 .cr-msg-stamp.user { align-self: flex-end; margin-right: 44px; }
 .cr-msg-stamp.ai   { align-self: flex-start; margin-left: 44px; }
 #appChatRoom.cr-no-avatar .cr-msg-stamp.user { margin-right: 4px; }
@@ -400,7 +400,7 @@
 /* 聊天窗口里的动作描写（*星号* 包住的）：放在气泡外，灰色斜体小字，贴着气泡 */
 .cr-action-note {
   align-self: flex-start; margin-left: 40px; max-width: 68%;
-  font-size: 12px; line-height: 1.5; color: #5e4e56; font-style: italic;
+  font-size: 12px; line-height: 1.5; color: #777; font-style: italic;
   padding: 0 4px; white-space: pre-wrap; word-break: break-word;
 }
 .cr-action-note.before { margin-bottom: -6px; }
@@ -409,7 +409,7 @@
 /* 只有动作、没有说话的一条：不显示气泡底色和头像 */
 .chat-msg-bubble.cr-action-only {
   background: none !important; box-shadow: none !important; border: none !important;
-  padding: 0 4px; font-size: 12px; color: #5e4e56; font-style: italic;
+  padding: 0 4px; font-size: 12px; color: #777; font-style: italic;
 }
 .chat-msg-row:has(.cr-action-only) .chat-msg-avatar { visibility: hidden; height: 0; }
 
@@ -420,7 +420,28 @@
   60% { transform: rotate(7deg); }
 }
 .chat-msg-avatar.cr-pat-shake { animation: crPatShake 0.36s ease; }
-.cr-pat-notice { color: #6d5962; }
+.cr-pat-notice { color: #777; }
+/* 铺在聊天背景上的小字：很淡的白底，不做发光。消息下面那行小时间不加底。顶栏和外面的列表不加 */
+#appChatRoom:not(.cr-qb-in-nav) #chatMsgList .cr-time-sep,
+#appChatRoom:not(.cr-qb-in-nav) #chatMsgList .cr-pat-notice:not(.cr-whisper-notice),
+#appChatRoom:not(.cr-qb-in-nav) #chatMsgList .cr-recall-notice:not(.cr-whisper-notice) {
+  background: rgba(255,255,255,0.78);
+  border-radius: 8px;
+  padding: 3px 14px;
+}
+#appChatRoom:not(.cr-qb-in-nav) #chatMsgList .cr-speaker {
+  width: fit-content; max-width: calc(100% - 48px);
+  padding: 0 8px; border-radius: 7px;
+  background: rgba(255,255,255,0.78);
+}
+#appChatRoom:not(.cr-qb-in-nav) #chatMsgList .cr-action-note {
+  width: fit-content; border-radius: 8px;
+  background: rgba(255,255,255,0.72);
+}
+#appChatRoom:not(.cr-qb-in-nav) #chatMsgList .chat-msg-bubble.cr-action-only {
+  width: fit-content; border-radius: 8px;
+  background: rgba(255,255,255,0.72) !important;
+}
 /* 思维链折叠条（js/chat/render.js 的 renderThinkBar）：很小、灰色，点开看思考 */
 .cr-think-bar { align-self: flex-start; max-width: 80%; margin: 2px 0 -2px 48px; flex-shrink: 0; }
 .cr-think-head { display: inline-block; font-size: 11px; color: #a89aa0; padding: 2px 8px; border-radius: 9px; background: rgba(0,0,0,0.035); cursor: pointer; }
@@ -441,21 +462,6 @@
 .cr-msg-head { display: none; }
 /* 隔了一个小时以上：这一行写「距离上次聊天 多久」（.cr-time-sep.cr-time-gap），不写时间 */
 /* 往上翻着看的时候来了新消息：底部「↓ N 条新消息」，点了跳到最下面（js/chat/render.js 的 crStick / crPill） */
-/* 名字、时间、动作小字直接铺在聊天背景上：深一点，再加一圈浅影，换深色或花背景也看得出 */
-#appChatRoom .chat-room-main-title,
-#appChatRoom .chat-room-sub-title,
-#appChatRoom .cr-speaker,
-#appChatRoom .cr-msg-stamp,
-#appChatRoom .cr-time-sep,
-#appChatRoom .cr-action-note,
-#appChatRoom .chat-msg-bubble.cr-action-only,
-#appChatRoom .cr-recall-notice,
-#appChatRoom .cr-think-head,
-#appChatRoom .cr-load-more {
-  text-shadow: 0 0 2px rgba(255,248,250,0.95), 0 0 6px rgba(255,248,250,0.88), 0 1px 1px rgba(40,20,30,0.16);
-}
-#appChatRoom .cr-speaker .cr-honor { text-shadow: none; }
-
 .cr-new-pill { position: absolute; left: 50%; bottom: 12px; transform: translateX(-50%) translateY(6px); z-index: 20; opacity: 0; pointer-events: none;
   border: none; border-radius: 16px; padding: 6px 14px; font-family: inherit; font-size: 12.5px; color: #c0607a; background: rgba(255,255,255,0.94);
   box-shadow: 0 3px 12px rgba(150,100,120,0.2); transition: opacity 0.2s, transform 0.2s; cursor: pointer; }
