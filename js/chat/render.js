@@ -267,6 +267,7 @@ function renderHistMsgContent(m, list, empty) {
   var toolLead = m.mcpLead && renderMcpNotice(m.mcpLead);
   if (toolLead) list.appendChild(toolLead);
   if (m.recalled && !m._flash) return renderRecallNotice(m, list, empty);
+  if (m.callLog && typeof appendCallLogMsg === 'function') return appendCallLogMsg(m, list, empty);
   if (m.pat || m.note) return renderPatNotice(m, list, empty);
   if (m.whisperChat && typeof renderWhisperNotice === 'function') return renderWhisperNotice(m, list, empty);   // 群里的悄悄话：居中一行，点开看（js/chat/group.js）
   if (m.narr) return renderNarration(m, list, empty);

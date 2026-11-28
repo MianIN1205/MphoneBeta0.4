@@ -30,7 +30,7 @@ var REPLY_TAGS = [
   { names: ['星星'], take: 'starTakeTag' },                           // 悄悄叠的星星放进星星瓶（js/desk/starjar.js）
   { names: ['待关心', '已关心', '补人设'], take: 'lifeTakeTags' },     // js/char/life.js
   { names: ['记下持有'], take: 'assetTakeTags' },                     // js/chat/assets.js
-  { names: ['骰子', '猜拳'] }                                         // 点数由小手机随机（js/chat/games.js），预览里藏掉
+  { names: ['骰子', '猜拳', '硬币'] }                                 // 结果由小手机随机（js/chat/games.js），预览里藏掉
 ];
 var REPLY_HIDE_RE = new RegExp('<(' + REPLY_TAGS.reduce(function(a, t) { return a.concat(t.names); }, []).join('|') + ')(?![\\u4e00-\\u9fffA-Za-z])[\\s\\S]*?(<\\/\\1>|$)', 'gi');
 function replyHideTags(text) {

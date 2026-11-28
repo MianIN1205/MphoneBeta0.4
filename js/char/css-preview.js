@@ -51,7 +51,7 @@ function cssPreviewRoomHtml(a, c) {
   room.classList.add('active');
   room.classList.add('cr-qb-on');
   room.removeAttribute('style');
-  room.querySelectorAll('.cr-status-panel, .cr-sp-mask, .cr-plus-panel:not(#crPlusPanel), .cr-select-bar, .stk-suggest, .cr-quote-bar, .mine-acc-overlay, #voicePop').forEach(function(el) { el.remove(); });
+  room.querySelectorAll('.cr-status-panel, .cr-sp-mask, .cr-plus-panel:not(#crPlusPanel), .cr-select-bar, .stk-suggest, .cr-quote-bar, .mine-acc-overlay').forEach(function(el) { el.remove(); });
   room.querySelectorAll('.cr-view').forEach(function(v) { v.classList.toggle('active', (v.dataset.crview === 'contacts') === drama); });
   room.querySelector('#msgBtnChat').classList.toggle('active', !drama);
   room.querySelector('#msgBtnContacts').classList.toggle('active', drama);
@@ -98,6 +98,18 @@ function cssPreviewRoomHtml(a, c) {
   var menu = room.querySelector('#crPlusPanel');
   if (menu) menu.classList.remove('open');
   room.querySelector('#crPlusBtn').classList.remove('active');
+  var voice = room.querySelector('#voicePop');
+  if (voice) voice.classList.remove('open');
+  // 预览是把当前打开的聊天室复制一份。正在和小梦聊天时，底栏上的快捷工作栏是开着的，复制会把她的底栏带进别人的预览。
+  // 点「应用」会把卡片重画一遍，于是预览又变回小梦的底栏。这里按要预览的那个人决定：只有预览小梦自己才留工作栏。
+  var work = room.querySelector('#mianinWorkbar');
+  if (work) {
+    var own = !!c.builtinAssistant;
+    work.hidden = !own;
+    work.style.display = own ? '' : 'none';
+    var workPanel = work.querySelector('#mianinWorkPanel');
+    if (workPanel) workPanel.hidden = true;
+  }
   paintCharAvatar(room.querySelector('#chatRoomHeadAv'), c);
   paintRoomBackground(room, part);
   return { room: room, css: lookCss(part, '#appChatRoom') + '\n' + (part.customCss || ''), global: globalCssForChat() };
@@ -123,23 +135,11 @@ function cssMiniPreview(a) {
     '<style>' + (p.global || '') + '</style><style>' + p.css + '</style></head><body>' +
     '<div class="' + (p.phoneClass ? p.phoneClass.replace(/"/g, '') : 'phone fullscreen') + '"' + (p.phoneStyle ? ' style="' + p.phoneStyle.replace(/"/g, '&quot;') + '"' : '') + '>';
   var tail = '</div></body></html>';
-  var doc = shell + (p.room ? p.room.outerHTML : p.html) + tail;
+  var live = p.room ? cssPreviewLiveScript() : '';
+  var doc = shell + (p.room ? p.room.outerHTML : p.html) + live + tail;
   var box = cssPreviewFrame(doc, H);
-  var open = actionLookPreviewButton(function(menuOpen) {
-    if (!menuOpen) return cssPreviewFrame(doc, expandedHeight);
-    var room = p.room.cloneNode(true);
-    var panel = room.querySelector('#crPlusPanel');
-    var pages = panel.querySelector('#crPlusPages');
-    var firstRow = pages.firstElementChild;
-    Array.from(firstRow.children).slice(4).forEach(function(item) { item.remove(); });
-    pages.replaceChildren(firstRow);
-    panel.replaceChildren(pages);
-    firstRow.style.height = 'auto';
-    firstRow.style.gridTemplateRows = 'auto';
-    panel.classList.add('open');
-    room.querySelector('#crPlusBtn').classList.add('active');
-    room.querySelector('#crBottomBar').classList.add('panel-open');
-    return cssPreviewFrame(shell + room.outerHTML + tail, expandedHeight);
+  var open = actionLookPreviewButton(function() {
+    return cssPreviewFrame(doc, expandedHeight);
   }, !!p.room);
   open.className = 'cr-css-preview-open';
   var label = document.createElement('span');
@@ -149,13 +149,22 @@ function cssMiniPreview(a) {
   return box;
 }
 
+// 放大后的预览自己响应点击：点麦克风露出录音条（里面有「文」），点加号展开菜单。预览页不连真的录音。
+function cssPreviewLiveScript() {
+  return '<script>(function(){document.addEventListener("click",function(e){' +
+    'var mic=e.target.closest("#crMicBtn"),plus=e.target.closest("#crPlusBtn");if(!mic&&!plus)return;e.preventDefault();' +
+    'var voice=document.getElementById("voicePop"),panel=document.getElementById("crPlusPanel"),bar=document.getElementById("crBottomBar"),plusBtn=document.getElementById("crPlusBtn");' +
+    'if(mic&&voice){var on=!voice.classList.contains("open");voice.classList.toggle("open",on);if(on&&panel){panel.classList.remove("open");if(bar)bar.classList.remove("panel-open");if(plusBtn)plusBtn.classList.remove("active");}}' +
+    'if(plus&&panel){var show=!panel.classList.contains("open");panel.classList.toggle("open",show);if(bar)bar.classList.toggle("panel-open",show);if(plusBtn)plusBtn.classList.toggle("active",show);if(show&&voice)voice.classList.remove("open");}' +
+    '});})();<\/script>';
+}
 function cssPreviewFrame(doc, height) {
   var box = document.createElement('div');
   box.className = 'cr-css-preview';
   box.style.setProperty('--look-preview-height', height + 'px');
   box.style.aspectRatio = '390 / ' + height;
   var frame = document.createElement('iframe');
-  frame.setAttribute('sandbox', '');
+  frame.setAttribute('sandbox', 'allow-scripts');
   frame.setAttribute('tabindex', '-1');
   frame.title = '美化效果';
   frame.srcdoc = doc;

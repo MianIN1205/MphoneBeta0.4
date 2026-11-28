@@ -22,7 +22,7 @@ function stripMsg(m, skipAlts) {
   var o = { role: m.role, content: m.content, imgSrc: m.imgSrc, images: m.images, sticker: m.sticker, status: m.status, statusHtml: m.statusHtml, statusLined: m.statusLined, time: m.time,
             quote: m.quote, recalled: m.recalled, recalledText: m.recalledText, recalledBy: m.recalledBy,
             voice: m.voice, transcript: m.transcript, action: m.action, recap: m.recap, pat: m.pat, patSuffix: m.patSuffix, patWho: m.patWho, cal: m.cal,
-            narr: m.narr, note: m.note, noteAI: m.noteAI, think: m.think, errs: m.errs, errTrail: m.errTrail, mcpRuns: m.mcpRuns, mcpLead: m.mcpLead, autoPrevAt: m.autoPrevAt, file: m.file, textImg: m.textImg, photo: m.photo, illus: m.illus, tg: m.tg, speaker: m.speaker, play: m.play, game: m.game, whisperChat: m.whisperChat, privateCard: m.privateCard };
+            narr: m.narr, note: m.note, noteAI: m.noteAI, think: m.think, errs: m.errs, errTrail: m.errTrail, mcpRuns: m.mcpRuns, mcpLead: m.mcpLead, autoPrevAt: m.autoPrevAt, file: m.file, textImg: m.textImg, photo: m.photo, illus: m.illus, tg: m.tg, speaker: m.speaker, play: m.play, game: m.game, whisperChat: m.whisperChat, privateCard: m.privateCard, callLog: m.callLog };
   if (m.alts && !skipAlts) {
     o.alts = m.alts.map(function(group) {
       return group.map(function(g) { return stripMsg(g, true); });

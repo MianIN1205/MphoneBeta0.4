@@ -48,7 +48,15 @@ function updateBubbleSliderThumb() {
 }
 
 bubbleOpacitySlider.addEventListener('input', updateBubbleSliderThumb);
-requestAnimationFrame(function() { requestAnimationFrame(updateBubbleSliderThumb); });
+function updateInkSliderThumb() {
+  var sl = document.getElementById('inkOpacity');
+  var th = document.getElementById('inkSliderThumb');
+  if (!sl || !th) return;
+  document.getElementById('inkOpacityValue').textContent = sl.value + '%';
+  th.style.left = ((parseInt(sl.value, 10) || 0) / 100 * sl.offsetWidth) + 'px';
+}
+document.getElementById('inkOpacity').addEventListener('input', updateInkSliderThumb);
+requestAnimationFrame(function() { requestAnimationFrame(function() { updateBubbleSliderThumb(); updateInkSliderThumb(); }); });
 
 // 效果 chip 单选
 document.getElementById('bubbleEffectChips').querySelectorAll('.bubble-effect-chip').forEach(function(chip) {

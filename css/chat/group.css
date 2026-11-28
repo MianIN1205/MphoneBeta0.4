@@ -67,6 +67,9 @@
 .gp-hb-list > div { display: flex; justify-content: space-between; padding: 5px 12px; font-size: 12px; border-top: 1px solid rgba(0, 0, 0, 0.04); }
 .gp-hb-list b { font-weight: 500; color: #e8573a; }
 .gp-opt-inputs { display: flex; flex-direction: column; gap: 6px; }
+.gp-hb-modes { display: flex; gap: 6px; margin: 2px 0 8px; }
+.gp-hb-modes .pf-radio-btn { flex: 1; text-align: center; }
+.grp-modal .auto-row[hidden], .grp-modal [hidden] { display: none; }
 
 /* 群设置：基础、美化 */
 .grp-field { display: flex; flex-direction: column; gap: 7px; padding: 8px 0; }

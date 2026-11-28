@@ -216,24 +216,114 @@ function appendPrivatePlusCard(role, m, list, empty) {
   return result;
 }
 var activePrivateCall = null;
-function privatePlusCall(ctx) {
-  if (activePrivateCall) { activePrivateCall.restore(); return; }
-  var picker = privatePlusDialog('通话', '<div class="mine-acc-actions"><button class="mine-acc-btn mine-acc-btn-close" data-mode="audio">语音通话</button><button class="mine-acc-btn mine-acc-btn-add" data-mode="video">视频通话</button></div>');
-  picker.querySelector('[data-close]').onclick = function() { picker.remove(); };
-  picker.querySelectorAll('[data-mode]').forEach(function(button) {
-    button.onclick = function() { picker.remove(); openPrivateCallScreen(ctx, button.dataset.mode); };
+var callPop = document.getElementById('callPop');
+if (callPop && callPop.parentNode !== document.body) document.body.appendChild(callPop);
+var callPopAnchor = null;
+function placeCallPop() {
+  if (!callPopAnchor || !callPop) return;
+  var r = callPopAnchor.getBoundingClientRect(), w = callPop.offsetWidth || 132;
+  callPop.style.left = Math.max(8, Math.min(window.innerWidth - w - 8, r.left + r.width / 2 - w / 2)) + 'px';
+  callPop.style.bottom = (window.innerHeight - r.top + 8) + 'px';
+}
+function closeCallPick() { if (callPop) callPop.classList.remove('open'); }
+function openCallPick(anchor) {
+  var ctx = privatePlusContext();
+  if (!ctx) { showToast('这个功能先在私聊里使用', 'plain'); return; }
+  if (activePrivateCall) {
+    closeCallPick();
+    if (typeof closeCrPlusPanel === 'function') closeCrPlusPanel();
+    activePrivateCall.restore();
+    return;
+  }
+  callPopAnchor = anchor || document.querySelector('.cr-plus-item[data-func="通话"]');
+  callPop.classList.add('open');
+  placeCallPop();
+  requestAnimationFrame(placeCallPop);
+}
+document.addEventListener('pointerdown', function(e) {
+  if (!callPop || !callPop.classList.contains('open')) return;
+  if (!callPop.contains(e.target) && !(callPopAnchor && callPopAnchor.contains(e.target))) closeCallPick();
+}, true);
+if (callPop) callPop.querySelectorAll('[data-mode]').forEach(function(button) {
+  button.addEventListener('click', function() {
+    var ctx = privatePlusContext();
+    var mode = button.dataset.mode;
+    closeCallPick();
+    if (typeof closeCrPlusPanel === 'function') closeCrPlusPanel();
+    if (ctx) openPrivateCallScreen(ctx, mode);
   });
+});
+function privatePlusCall() { openCallPick(); }
+function paintCallWave(canvas) {
+  if (!canvas) return;
+  var ctx = canvas.getContext('2d'), W = canvas.width, H = canvas.height;
+  ctx.clearRect(0, 0, W, H);
+  var barW = 2, gap = 2, n = Math.floor(W / (barW + gap));
+  for (var i = 0; i < n; i++) {
+    var h = ((i * 7 % 13) / 13) * (H * 0.42) + 3;
+    ctx.fillStyle = 'rgba(255,244,248,0.88)';
+    ctx.fillRect(i * (barW + gap), (H - h) / 2, barW, h);
+  }
+}
+function appendCallLogMsg(m, list, empty) {
+  if (empty) empty.style.display = 'none';
+  var el = document.createElement('button');
+  el.type = 'button';
+  el.className = 'cr-recall-notice cr-call-log';
+  el.textContent = m.content || '通话';
+  el._msg = m;
+  el._extras = [];
+  el.onclick = function() { openCallRecord(m); };
+  list.appendChild(el);
+  if (typeof crStick === 'function') crStick(list);
+  return el;
+}
+function openCallRecord(m) {
+  var log = m && m.callLog || {};
+  var box = document.createElement('div');
+  box.className = 'private-call-rec';
+  var lines = log.lines || [];
+  if (!lines.length) {
+    var empty = document.createElement('div');
+    empty.className = 'private-call-rec-empty';
+    empty.textContent = '这次没有留下文字';
+    box.appendChild(empty);
+  }
+  lines.forEach(function(line) {
+    var row = document.createElement('div');
+    row.className = 'private-call-rec-line';
+    var who = document.createElement('b');
+    who.textContent = line.who || '';
+    var text = document.createElement('p');
+    text.textContent = line.text || '';
+    row.appendChild(who);
+    row.appendChild(text);
+    box.appendChild(row);
+  });
+  var d = privatePlusDialog(m.content || '通话记录', '');
+  d.querySelector('.mine-acc-title').after(box);
+  d.querySelector('[data-close]').onclick = function() { d.remove(); };
 }
 function openPrivateCallScreen(ctx, mode) {
   if (activePrivateCall) { activePrivateCall.restore(); return; }
   var d = document.createElement('section');
-  d.className = 'private-call-screen';
+  d.className = 'private-call-screen' + (mode === 'video' ? ' is-video' : '');
   d.setAttribute('role', 'dialog');
   d.setAttribute('aria-label', mode === 'video' ? '视频通话' : '语音通话');
-  d.innerHTML = '<header class="private-call-header"><button type="button" data-minimize aria-label="收起为小窗">⌄</button><span></span></header>' +
-    '<div class="private-call-stage"><div class="private-call-avatar"></div><strong class="private-call-name"></strong><small class="private-call-time">00:00</small><video playsinline muted hidden></video></div>' +
-    '<div class="private-call-bottom"><div class="private-call-status" role="status"></div><details class="private-call-text"><summary>文字聊天</summary><div class="private-call-log" aria-live="polite"></div><div class="private-call-compose"><textarea class="field-input" rows="1" placeholder="你想说的话" aria-label="你的文字"></textarea><button type="button" data-send>发送</button></div></details><audio controls hidden></audio>' +
-    '<div class="private-call-controls"><button type="button" data-record>录音</button><button type="button" data-camera hidden>关摄像头</button><button type="button" data-close>挂断</button></div></div>';
+  var icoDown = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9.5l6 6 6-6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+  var icoMic = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 14.5a3.2 3.2 0 0 0 3.2-3.2V6.7a3.2 3.2 0 0 0-6.4 0v4.6A3.2 3.2 0 0 0 12 14.5z" fill="none" stroke="currentColor" stroke-width="1.7"/><path d="M7 11.2a5 5 0 0 0 10 0M12 16.2v2.6" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg>';
+  var icoMicOff = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 10.8V6.7a3 3 0 0 0-5.2-2M9 9.2v1.8a3 3 0 0 0 4.7 2.5M7.2 11.2a5 5 0 0 0 7.6 3.4M12 16.2v2.6M5 5.2l13 13" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg>';
+  var icoCam = '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="7" width="12.5" height="10" rx="2" fill="none" stroke="currentColor" stroke-width="1.7"/><path d="M15.5 11.2L20.5 8v8l-5-2.8z" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/></svg>';
+  var icoFlip = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4.5 8.5h4V4.5M19.5 15.5h-4v4" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/><path d="M8.2 8.5a6 6 0 0 1 9.6-1.8M15.8 15.5a6 6 0 0 1-9.6 1.8" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg>';
+  var icoPhone = '<svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M7.2 3.6c.4-.4 1.1-.5 1.6-.2l1.8 1.1c.5.3.7.9.4 1.4l-.8 1.7c-.2.4 0 .9.4 1.2 1 .9 2.3 1.4 3.6 1.4.5 0 1 .3 1.2.8l.8 1.9c.2.6.1 1.2-.4 1.5l-1.5 1.1c-.5.4-1.2.3-1.7-.1C9.4 13.4 6.7 10.2 5.5 6.8c-.3-.6-.1-1.3.4-1.7z"/></svg>';
+  d.innerHTML = '<header class="private-call-header"><button type="button" data-minimize aria-label="收起通话，不挂断">' + icoDown + '<span>收起</span></button><span class="private-call-title"></span><span></span></header>' +
+    '<div class="private-call-stage"><div class="private-call-hero"><div class="private-call-avatar"></div><strong class="private-call-name"></strong><small class="private-call-time">00:00</small></div>' +
+    '<div class="private-call-log" aria-live="polite"></div>' +
+    '<div class="private-call-self"><video playsinline muted hidden></video><span class="private-call-self-off">摄像头关着</span></div></div>' +
+    '<div class="private-call-bottom"><div class="private-call-status" role="status"></div>' +
+    '<div class="private-call-take" hidden><button type="button" data-play aria-label="听这段录音">▶</button><canvas class="private-call-wave" width="160" height="28" aria-hidden="true"></canvas><b></b><button type="button" data-drop aria-label="丢掉这段录音">✕</button><audio hidden></audio></div>' +
+    '<div class="private-call-compose"><textarea class="field-input" rows="1" placeholder="说一句" aria-label="你的文字"></textarea><button type="button" data-send>发送</button></div>' +
+    '<div class="private-call-controls"><button type="button" data-record>' + icoMic + '<span>录音</span></button><button type="button" data-mute aria-label="闭麦">' + icoMicOff + '<span>闭麦</span></button><button type="button" data-camera hidden>' + icoCam + '<span>镜头</span></button><button type="button" data-flip hidden>' + icoFlip + '<span>翻转</span></button><button type="button" data-close>' + icoPhone + '<span>挂断</span></button></div></div>';
   var mini = document.createElement('button');
   mini.type = 'button'; mini.className = 'private-call-mini'; mini.hidden = true;
   mini.setAttribute('aria-label', '返回通话');
@@ -241,7 +331,7 @@ function openPrivateCallScreen(ctx, mode) {
   var root = document.querySelector('.phone');
   root.appendChild(d); root.appendChild(mini);
   var name = ctx.char.charAlias || ctx.char.charName || 'TA';
-  d.querySelector('.private-call-header span').textContent = mode === 'video' ? '视频通话' : '语音通话';
+  d.querySelector('.private-call-title').textContent = mode === 'video' ? '视频通话' : '语音通话';
   d.querySelector('.private-call-name').textContent = name;
   paintCharAvatar(d.querySelector('.private-call-avatar'), ctx.char);
   if (typeof startCallRing === 'function') startCallRing();   // 来电铃声
@@ -255,43 +345,121 @@ function openPrivateCallScreen(ctx, mode) {
     var time = String(Math.floor(elapsed / 60)).padStart(2, '0') + ':' + String(elapsed % 60).padStart(2, '0');
     d.querySelector('.private-call-time').textContent = mini.querySelector('small').textContent = time;
   }, 1000);
-  var video = d.querySelector('video'), audio = d.querySelector('audio'), input = d.querySelector('textarea'), log = d.querySelector('.private-call-log'), hint = d.querySelector('[role="status"]');
-  var record = d.querySelector('[data-record]'), send = d.querySelector('[data-send]'), camera, mic, recorder, recording, voiceUrl, cameraRequest = 0, recordTimer, closed = false, busy = false;
+  var video = d.querySelector('video'), selfView = d.querySelector('.private-call-self'), input = d.querySelector('textarea'), log = d.querySelector('.private-call-log'), hint = d.querySelector('[role="status"]');
+  var record = d.querySelector('[data-record]'), send = d.querySelector('[data-send]'), muteBtn = d.querySelector('[data-mute]'), take = d.querySelector('.private-call-take'), takeAudio = take.querySelector('audio'), camera, mic, recorder, recording, voiceUrls = [], cameraRequest = 0, recordTimer, recStarted = 0, closed = false, busy = false, facing = 'user', muted = false, dropTake = false;
   var request = new AbortController(), conversation = [];
+  function btnLabel(btn, text) { btn.querySelector('span').textContent = text; }
   function stop(stream) { if (stream) stream.getTracks().forEach(function(track) { track.stop(); }); }
   function close() {
     if (typeof stopCallRing === 'function') stopCallRing();
-    closed = true; request.abort(); clearTimeout(recordTimer); stop(camera); stop(mic); audio.pause();
-    if (voiceUrl) URL.revokeObjectURL(voiceUrl);
+    if (!closed) saveCallRecord();
+    closed = true; request.abort(); clearTimeout(recordTimer); stop(camera); stop(mic);
+    voiceUrls.forEach(function(url) { URL.revokeObjectURL(url); });
     clearInterval(clock); activePrivateCall = null; d.remove(); mini.remove();
   }
+  function saveCallRecord() {
+    var time = d.querySelector('.private-call-time').textContent || '00:00';
+    var lines = [];
+    log.querySelectorAll('.private-call-line').forEach(function(el) {
+      var whoEl = el.querySelector('b'), textEl = el.querySelector('p');
+      lines.push({ who: whoEl ? whoEl.textContent : '', text: textEl ? textEl.textContent : (el.querySelector('audio') ? '语音' : '') });
+    });
+    var label = (mode === 'video' ? '视频通话 ' : '语音通话 ') + time;
+    var msg = { role: 'user', content: label, time: Date.now(), callLog: { mode: mode, lines: lines } };
+    if (ctx.history) ctx.history.push(msg);
+    if (typeof saveHistories === 'function') saveHistories();
+    if (typeof privatePlusCurrent === 'function' && privatePlusCurrent(ctx) && typeof renderHistMsg === 'function') renderHistMsg(msg);
+    if (typeof renderChatCharList === 'function') renderChatCharList();
+  }
   d.querySelector('[data-close]').onclick = close;
-  var cameraButton = d.querySelector('[data-camera]');
+  var cameraButton = d.querySelector('[data-camera]'), flipButton = d.querySelector('[data-flip]');
+  function markCamera(on) {
+    selfView.classList.toggle('live', on);
+    video.hidden = !on;
+    video.classList.toggle('unmirror', facing !== 'user');
+    btnLabel(cameraButton, on ? '关闭' : '镜头');
+    flipButton.hidden = mode !== 'video';
+  }
   async function startCamera() {
     if (camera) return;
     var attempt = ++cameraRequest;
     try {
-      var stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user' } });
+      var stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: facing } });
       if (closed || camera || attempt !== cameraRequest) { stop(stream); return; }
-      camera = stream; video.srcObject = stream; video.hidden = false; await video.play();
-      cameraButton.textContent = '关摄像头';
+      camera = stream; video.srcObject = stream; markCamera(true); await video.play();
       hint.textContent = '发送时会附上当前画面';
-    } catch (_) { hint.textContent = '摄像头不可用，可以继续语音或文字'; }
+    } catch (_) { markCamera(false); hint.textContent = '摄像头不可用，可以继续语音或文字'; }
   }
-  hint.textContent = '可以录音，也可以用文字聊天';
+  function stopCamera() {
+    cameraRequest++; stop(camera); camera = null; video.srcObject = null; markCamera(false);
+    hint.textContent = '摄像头关着';
+  }
+  hint.textContent = mode === 'video' ? '摄像头关着。要发给 TA 再打开。' : '可以录音，也可以用文字聊天';
   if (mode === 'video') {
     cameraButton.hidden = false;
-    cameraButton.onclick = function() {
-      if (!camera) { startCamera(); return; }
-      cameraRequest++; stop(camera); camera = null; video.srcObject = null; video.hidden = true;
-      cameraButton.textContent = '开摄像头';
-      hint.textContent = '摄像头已关闭';
+    cameraButton.onclick = function() { if (!camera) startCamera(); else stopCamera(); };
+    flipButton.hidden = false;
+    flipButton.onclick = function() {
+      if (!camera) { hint.textContent = '先打开摄像头，再翻转。'; return; }
+      facing = facing === 'user' ? 'environment' : 'user';
+      stop(camera); camera = null; video.srcObject = null;
+      startCamera();
     };
-    cameraButton.textContent = '开摄像头';
-    startCamera();
+    var stage = d.querySelector('.private-call-stage'), drag = null;
+    selfView.addEventListener('pointerdown', function(e) {
+      var r = stage.getBoundingClientRect(), k = r.width / (stage.offsetWidth || r.width) || 1;
+      var box = selfView.getBoundingClientRect();
+      drag = { dx: (e.clientX - box.left) / k, dy: (e.clientY - box.top) / k, k: k };
+      try { selfView.setPointerCapture(e.pointerId); } catch (_) {}
+    });
+    selfView.addEventListener('pointermove', function(e) {
+      if (!drag) return;
+      var r = stage.getBoundingClientRect();
+      var x = (e.clientX - r.left) / drag.k - drag.dx, y = (e.clientY - r.top) / drag.k - drag.dy;
+      x = Math.max(0, Math.min(stage.clientWidth - selfView.offsetWidth, x));
+      y = Math.max(0, Math.min(stage.clientHeight - selfView.offsetHeight, y));
+      selfView.style.right = 'auto';
+      selfView.style.left = x + 'px';
+      selfView.style.top = y + 'px';
+    });
+    selfView.addEventListener('pointerup', function() { drag = null; });
+    selfView.addEventListener('pointercancel', function() { drag = null; });
   }
+  function showTake(src, ms) {
+    recording = src;
+    take.querySelector('b').textContent = Math.max(1, Math.round(ms / 1000)) + '″';
+    takeAudio.src = src;
+    take.hidden = false;
+    paintCallWave(take.querySelector('canvas'));
+    d.querySelector('.private-call-bottom').classList.add('has-take');
+    hint.textContent = '录音好了，点发送。';
+  }
+  function clearTake() {
+    recording = null;
+    take.hidden = true;
+    takeAudio.pause();
+    takeAudio.removeAttribute('src');
+    take.querySelector('[data-play]').textContent = '▶';
+    d.querySelector('.private-call-bottom').classList.remove('has-take');
+  }
+  take.querySelector('[data-play]').onclick = function() {
+    if (!takeAudio.getAttribute('src')) return;
+    if (takeAudio.paused) { takeAudio.play(); this.textContent = '❚❚'; }
+    else { takeAudio.pause(); this.textContent = '▶'; }
+  };
+  takeAudio.onended = function() { take.querySelector('[data-play]').textContent = '▶'; };
+  take.querySelector('[data-drop]').onclick = function() { clearTake(); hint.textContent = '这段录音丢掉了。'; };
+  muteBtn.onclick = function() {
+    muted = !muted;
+    muteBtn.classList.toggle('is-on', muted);
+    btnLabel(muteBtn, muted ? '开麦' : '闭麦');
+    muteBtn.setAttribute('aria-label', muted ? '开麦' : '闭麦');
+    if (muted && recorder && recorder.state === 'recording') { dropTake = true; recorder.stop(); }
+    hint.textContent = muted ? '麦关着，可以打字。' : '可以录音，也可以打字。';
+  };
   record.onclick = async function() {
     if (recorder && recorder.state === 'recording') { recorder.stop(); return; }
+    if (muted) { hint.textContent = '麦关着。点开麦以后再录音。'; return; }
     record.disabled = true;
     try {
       mic = await navigator.mediaDevices.getUserMedia({ audio: true });
@@ -300,25 +468,42 @@ function openPrivateCallScreen(ctx, mode) {
       recorder = new MediaRecorder(mic);
       recorder.ondataavailable = function(event) { if (event.data.size) chunks.push(event.data); };
       recorder.onstop = function() {
-        clearTimeout(recordTimer); stop(mic); record.textContent = '录音';
-        if (!chunks.length || closed) return;
+        clearTimeout(recordTimer); stop(mic); btnLabel(record, '录音'); record.classList.remove('is-on');
+        if (dropTake || !chunks.length || closed) { dropTake = false; return; }
         var reader = new FileReader();
-        reader.onload = function() { recording = reader.result; hint.textContent = '录音已就绪，点发送。'; d.querySelector('.private-call-text').open = true; };
+        reader.onload = function() { showTake(reader.result, Date.now() - recStarted); };
         reader.readAsDataURL(new Blob(chunks, { type: recorder.mimeType }));
       };
+      clearTake();
+      recStarted = Date.now();
       recorder.start();
       recordTimer = setTimeout(function() { if (recorder.state === 'recording') recorder.stop(); }, 60000);
-      record.textContent = '结束录音';
+      btnLabel(record, '结束'); record.classList.add('is-on');
     } catch (_) { stop(mic); hint.textContent = '麦克风不可用，可以继续打字。'; }
     finally { record.disabled = false; }
   };
-  function paint(name, text) {
+  function paint(who, text, src) {
     var line = document.createElement('div');
-    line.textContent = name + '：' + text;
+    line.className = 'private-call-line' + (who === '我' ? ' mine' : '');
+    var tag = document.createElement('b');
+    tag.textContent = who;
+    line.appendChild(tag);
+    if (text) {
+      var p = document.createElement('p');
+      p.textContent = text;
+      line.appendChild(p);
+    }
+    if (src) {
+      var clip = document.createElement('audio');
+      clip.controls = true; clip.src = src;
+      line.appendChild(clip);
+      if (who !== '我') clip.play().catch(function() {});
+    }
     log.appendChild(line); log.scrollTop = log.scrollHeight;
+    return line;
   }
   send.onclick = async function() {
-    var text = input.value.trim(), voice = recording, cfg = getApiCfg(ctx.char);
+    var typed = input.value.trim(), text = typed, voice = recording, cfg = getApiCfg(ctx.char);
     if (busy || (!text && !voice && !camera) || (recorder && recorder.state === 'recording')) return;
     if (!cfg.url || !cfg.key || !cfg.model) { hint.textContent = '请先配置角色使用的模型。'; return; }
     if (typeof stopCallRing === 'function') stopCallRing();   // 接通，停铃声
@@ -345,16 +530,23 @@ function openPrivateCallScreen(ctx, mode) {
       var reply = String(await llmRequest(context, { cfg: cfg, stream: false, signal: request.signal }) || '').trim();
       if (closed) return;
       if (!reply) throw new Error('没有回复');
-      paint('我', parts[0].text); paint(name, reply);
-      d.querySelector('.private-call-text').open = true;
+      var mineText = typed;
+      if (!mineText && text && text !== '（通话录音）' && text !== '看看我给你看的画面。') mineText = text;
+      if (!mineText && !voice && camera) mineText = '发了一帧画面';
+      paint('我', mineText, voice || '');
+      var replyLine = paint(name, reply);
       conversation.push({ role: 'user', content: parts[0].text }, { role: 'assistant', content: reply });
-      input.value = ''; recording = null; hint.textContent = '可以继续说话或打字。';
+      input.value = ''; clearTake(); hint.textContent = '可以继续说话或打字。';
       if (ttsCfg.key) {
         try {
           var blob = await ttsSynthesize(reply);
           if (closed) return;
-          if (voiceUrl) URL.revokeObjectURL(voiceUrl);
-          voiceUrl = URL.createObjectURL(blob); audio.src = voiceUrl; audio.hidden = false;
+          var url = URL.createObjectURL(blob);
+          voiceUrls.push(url);
+          var talk = document.createElement('audio');
+          talk.controls = true; talk.src = url;
+          replyLine.appendChild(talk);
+          talk.play().catch(function() {});
         } catch (_) { hint.textContent = '语音播放不可用，文字回复已显示。'; }
       }
     } catch (err) { if (!closed) hint.textContent = '通话消息发送失败：' + explainError(err).title; }

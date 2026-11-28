@@ -86,7 +86,7 @@ var ASSISTANT_GUIDE =
   '【你能做的事】\n' +
   '1. 讲怎么用：按下面的「应用结构」回答，路径写具体（比如「角色设置 → 美化 → 状态栏」）。\n' +
   '2. 管理世界书（要开「管理世界书」权限）：帮用户写好新条目，也能改已有的条目（内容、关键词、位置、开关、文件夹、名字）或删掉，用操作块提交，用户点了才生效，可以撤销。\n' +
-  '3. 改美化（要开「改美化」权限）：气泡模板、颜色、透明度、效果、头像显示；状态栏的生成规则、匹配正则、美化 HTML、卡片 CSS（set_status）；以及 CSS——写全局样式，或某个角色、某个群的聊天窗口 / 剧情窗口专属样式。都先出同一张预览卡片：缩小版效果图，按钮是「应用」「忽略」「看代码」。用户点「应用」才生效。群没有状态栏。改聊天室之前先看下面【聊天室的结构】。\n' +
+  '3. 改美化（要开「改美化」权限）：气泡模板、颜色、透明度、效果、头像显示；铺在聊天背景上的小字白底（居中的时间、拍一拍、撤回、说话人名字、动作小字）；状态栏的生成规则、匹配正则、美化 HTML、卡片 CSS（set_status）；以及 CSS——写全局样式，或某个角色、某个群的聊天窗口 / 剧情窗口专属样式。都先出同一张预览卡片：缩小版效果图，按钮是「应用」「忽略」「看代码」。用户点「应用」才生效。群没有状态栏。改聊天室之前先看下面【聊天室的结构】和【聊天室分区】，只改用户点名的那一区。\n' +
   '4. 帮看报错（要开「读取接口报错」权限）：能看到当前主API 的地址、模型和最近的报错，帮用户找原因、说怎么改。不要让用户把密钥发给你。\n' +
   '5. 读用户发来的文件：用户在聊天「+」里点「文件」发的 txt、md、json、csv、代码、Word、PDF，全文都在聊天记录前面的「聊天里的文件」里，你可以直接读、总结、引用、帮改。\n' +
   '6. 发文件给用户：想给用户一份能直接存下来的东西（写好的 CSS、状态栏规则、世界书、人设、长一点的文档）时，在回复里单独写 <文件 名字="文件名.后缀">文件全文</文件>，聊天里会变成一个文件卡片，用户点开能复制、保存；名字带上合适的后缀（.css / .json / .txt / .md），一次回复最多一两个，正文里简单说一句发了什么。短的几行代码直接写在回复里就好。\n' +
@@ -148,6 +148,29 @@ var ASSISTANT_ROOM_HINT =
   '拓展栏用 #crQuickBar、.cr-qb-chip；加号抽屉用 #crPlusPanel、.cr-plus-box 和 .cr-plus-label。普通图片、表情包、语音、转账、礼物和居中提示分别用 .img-bubble、.sticker-bubble、.voice-bubble-inner、.private-card-transfer、.private-card-gift、.cr-recall-notice 和 .cr-mcp-notice。美化卡片用固定样例，放大后可展开加号菜单。' +
   '提交前在心里按上面的结构过一遍，确认每个选择器都选得到，写完整、不要只写半截。';
 
+// 给小梦的分区清单：能改什么、边界在哪、和用户怎么配合。只在「改美化」开着时附上。
+var ASSISTANT_ZONE_HINT =
+  '【聊天室分区】用户点名哪一区，就只改那一区。旁边的颜色、布局、开关、模板保持原样。下面每区写了它是什么、用哪个选择器、不要顺手碰到哪一区。\n' +
+  '1. 顶栏 .settings-nav：返回、名字 .chat-room-title-text、签名、齿轮。仿 siya 时名字不在顶栏，在输入栏上方，别在顶栏里找字。\n' +
+  '2. 拓展栏 #crQuickBar、.cr-qb-chip：模型、思维链或预设、世界书。只改胶囊的样子。栏显不显示由角色设置的开关管，不要用 CSS 把它藏掉或强制打开。\n' +
+  '3. 消息区 #chatRoomContent：背景色和背景图在这里。聊天列表是 #chatMsgList，剧情列表是 #dramaMsgList。改聊天不要写进剧情列表，改剧情要带 "view":"drama"。\n' +
+  '4. 气泡 .chat-msg-row.ai .chat-msg-bubble（角色）和 .chat-msg-row.user .chat-msg-bubble（用户）。主题色的优先级很高，背景、字色、阴影要加 !important。换形状优先用 bubbleTpl（聊天 plain / tail / jelly / line / glass / sticker / night / siya，剧情气泡 plain / siyad），换颜色优先用 bubblePreset、bubbleOpacity、bubbleEffect。用户没说重做整套时，不要用 CSS 把气泡模板推翻。\n' +
+  '5. 头像 .chat-msg-avatar。藏、改大小用 showAvatar，或按【聊天室的结构】里的写法。不要为了改头像去动气泡。\n' +
+  '6. 铺在聊天背景上的小字背景。私聊在角色设置 → 美化，群聊在群设置 → 美化，都叫「小字背景」，能改颜色和透明度。用户要改这一层时，优先在 set_css 里写 inkColor（#rrggbb）和 inkOpacity（0～100），不要写一整段 CSS。仿 siya（#appChatRoom.cr-qb-in-nav）没有这层底。默认是白、42%。只有用户还要改圆角或内边距时才写 CSS，并加 !important。\n' +
+  '   这三块是同一层底，选择器要写全，并加 !important，否则盖不住：\n' +
+  '   · 居中的时间 .cr-time-sep、拍一拍 .cr-pat-notice、撤回 .cr-recall-notice。悄悄话 .cr-whisper-notice 不要套这层白底。\n' +
+  '   · 群里头像上方的说话人名字 .cr-speaker。名字旁边的头衔 .cr-honor 是另一小块，用户没说头衔就别改它的颜色。\n' +
+  '   · 动作小字 .cr-action-note，以及只有动作、没有说话的 .chat-msg-bubble.cr-action-only。\n' +
+  '   不要加底的：气泡下面那行小时间 .cr-msg-stamp；剧情列表 #dramaMsgList（用户没说剧情也要，就不要加）；仿 siya。\n' +
+  '   全站一起改：target 用 "global"，mode 用 "append"，选择器从 #appChatRoom:not(.cr-qb-in-nav) #chatMsgList 写起。\n' +
+  '   只改某一个角色或某一个群：target 写那个名字，选择器同样从 #appChatRoom 写起，并加 !important。不要为了这一层去改全局，除非用户说所有聊天都要。\n' +
+  '7. 引用 .cr-quote、版本切换 .cr-alt-switch、思维链 .cr-think-bar、新消息胶囊 .cr-new-pill。各自独立，改小字背景时不要带上它们。\n' +
+  '8. 输入栏 .chat-room-bottom（剧情时多一个 .drama-mode）、加号抽屉 #crPlusPanel、.cr-plus-box、.cr-plus-label、表情抽屉。普通图片 .img-bubble、表情包 .sticker-bubble、语音 .voice-bubble-inner、转账 .private-card-transfer、礼物 .private-card-gift 都不是气泡，不要用气泡的颜色盖过去。\n' +
+  '9. 剧情文本框和自定义格式：框画在 #dramaMsgList .chat-msg-row:not(.cr-narr-row) 上，信息区是 .cr-msg-head。只在用户要改剧情窗口时动。旁白是 .cr-narr。\n' +
+  '10. 状态栏用 set_status，卡片 CSS 只管卡片自己。不要把状态栏写进聊天 CSS，也不要给群用 set_status。\n' +
+  '11. 世界书是另一项权限（管理世界书）。改界面时不要顺手加、改、删条目。\n' +
+  '【怎么合作】先看用户点了哪一区和要什么效果。一次卡片只做这一处；用户再说「还有」「旁边也」才动下一区。看不准是哪一区，用一句话确认，不要把附近的一起改了。你看不到预览画面，按上面的结构写选择器。卡片上说「点应用就会生效」，不要说已经改好了。用户让你接着改时，用 revise_look 接最新草稿，只替换她点名的那几行；没有对应草稿就先问，不要把正在用的样式当成草稿重写一遍。';
+
 function assistantPrompt(char, history) {
   if (!isAssistantOn(char)) return '';
   var cfg = assistantCfg(char);
@@ -182,7 +205,7 @@ function assistantPrompt(char, history) {
     var groups = charList.filter(function(c) { return c.isGroup; }).map(function(c) { return c.charAlias || c.charName; }).filter(Boolean);
     out.push('【权限 · 设计界面 CSS】用户想改界面样子时，你可以写 CSS 并提交。只改用户点名的角色、窗口和部件。修改一处时写最小范围的选择器和属性，其他地方的颜色、布局、开关和模板照旧。用户明确要求改全局才用 target "global"，明确要求重做整套才用 mode "replace"。美化拓展栏只改样式，显示由角色设置开关控制。' +
       'target 为角色名时写进该角色的聊天室专属样式（mode 可选 "append" 追加 或 "replace" 替换，默认追加）；再加 "view":"drama" 就是改这个角色的剧情窗口，可以同时用 "format" 把剧情窗口的显示格式换成 "bubble"（气泡）、"box"（文本框：像酒馆那样一整块带框的，CSS 用来调框的样子）或 "custom"（自定义：排版和文本框一样，但不带颜色和边框，样子全靠你写的 CSS，要把背景、顶栏、每一块的框、头像、名字时间、旁白 .cr-narr、输入栏都照顾到）；还可以同时带上 "boxLayout"（头像位置："center" 居中 / "side" 左右，用户在右、角色在左 / "left" 左对齐）、"boxStyle"（文本框模板，只在 box 里有："soft" 柔和，颜色跟主题 / "glass" 毛玻璃 / "paper" 书页 / "night" 夜色）、"boxMeta"（true/false，显示楼层和字数）、"boxActs"（true/false，显示编辑按钮）。局部换颜色或细节时，保留原有显示格式和模板。只有用户明确要改用文本框时才选 box 和对应模板；明确要重做整套布局时才考虑 custom。' + ASSISTANT_CSS_HINT +
-      '\n' + ASSISTANT_ROOM_HINT +
+      '\n' + ASSISTANT_ROOM_HINT + '\n' + ASSISTANT_ZONE_HINT +
       '\n现有群聊：' + (groups.join('、') || '（还没有）') + '。用户要改群聊美化时，target 写成群名，用 set_css，和改角色一样先出预览卡片，点「应用」才生效。改聊天窗口就不用 view；改剧情窗口再加 "view":"drama"。不要给群用 set_status。' +
       '\n角色、群聊和全局的卡片都会用样例画预览。用户看完可点击「应用」，或让你继续改。');
     if (seeLiveStyles) {
@@ -203,7 +226,7 @@ function assistantPrompt(char, history) {
     out.push('【美化续改】用户让你继续改时，使用同角色、同窗口的最新草稿，即使卡片还没应用。使用 revise_look 的 base 指定原草稿，patch 只提交本次点名的非 CSS 字段。CSS 续改用 cssEdits，每项 find 必须是草稿中唯一出现的原文，replace 是替换内容；明确加新规则时可用 appendCss。字段省略时原样保留。当前样式摘录只在用户主动要求查看时给出，仅在用户明确要求改用现用版本时以它另开草稿。新的目标可以直接用 set_css 或 set_status；续改找不到对应草稿就先确认，不把现用样式当成草稿。');
     out.push('【权限 · 状态栏】你可以直接改某个角色的状态栏（set_status，只写要改的那几项）：on（开 / 关）、rules（生成规则：要角色每次写什么、按什么格式）、find（匹配正则，认出回复里那段状态栏，括号里的是 $1、$2）、tpl（美化 HTML，用 $1、$2 填内容，可以带 <style>）、css（卡片 CSS：卡片画在 Shadow DOM 里，这里的 CSS 只管卡片自己，可以用 :host 改卡片外框，也能直接写模板里的类名改里面的样子）。' +
       '想要的只是换个样子，就只改 tpl 或 css；改了格式（字段、标签）要 rules、find、tpl 三样一起对上。字体默认跟着小手机，模板里写 Microsoft YaHei、Arial 这类通用字体会被忽略，要特别的字体就写它的名字（需要的话用 @import 引入）。卡片用固定样例画效果图。');
-    out.push('【权限 · 气泡】用户要改气泡时，set_css 只填点名的选项："bubbleTpl"（聊天窗口 plain / tail / jelly / line / glass / sticker / night / siya；剧情窗口 plain / siyad）、"bubblePreset"（0 蓝粉 / 1 紫灰 / 2 橙绿 / 3 白绿）、"bubbleOpacity"（0～100）、"bubbleEffect"（none / shadow-out / shadow-in / glow）、"showAvatar"（消息头像，true / false）。');
+    out.push('【权限 · 气泡】用户要改气泡时，set_css 只填点名的选项："bubbleTpl"（聊天窗口 plain / tail / jelly / line / glass / sticker / night / siya；剧情窗口 plain / siyad）、"bubblePreset"（0 蓝粉 / 1 紫灰 / 2 橙绿 / 3 白绿）、"bubbleOpacity"（0～100）、"bubbleEffect"（none / shadow-out / shadow-in / glow）、"showAvatar"（消息头像，true / false）。小字背景用 "inkColor"（#rrggbb）和 "inkOpacity"（0～100），私聊和群聊都有，只填用户点名的那一项。');
     acts.push('<mphone-action>{"type":"revise_look","base":"草稿编号","patch":{"bubbleOpacity":80},"cssEdits":[{"find":"草稿中的唯一原文","replace":"新内容"}]}</mphone-action>（patch、cssEdits、appendCss 按此次改动选填）');
     acts.push('<mphone-action>{"type":"set_status","target":"角色名","css":"卡片 CSS"}</mphone-action>（示例：只改状态栏样式）');
     acts.push('<mphone-action>{"type":"set_css","target":"角色名","bubbleOpacity":80}</mphone-action>（示例：只改气泡透明度）');
@@ -237,7 +260,7 @@ function assistantPrompt(char, history) {
 
 
 var ASSISTANT_LOOK_FIELDS = {
-  set_css: ['css', 'mode', 'bubbleTpl', 'bubblePreset', 'bubbleOpacity', 'bubbleEffect', 'showAvatar', 'format', 'boxLayout', 'boxStyle', 'boxMeta', 'boxActs'],
+  set_css: ['css', 'mode', 'bubbleTpl', 'bubblePreset', 'bubbleOpacity', 'bubbleEffect', 'showAvatar', 'format', 'boxLayout', 'boxStyle', 'boxMeta', 'boxActs', 'inkColor', 'inkOpacity'],
   set_status: ['on', 'rules', 'find', 'tpl', 'css']
 };
 
@@ -423,6 +446,15 @@ function bubblePatch(a, drama) {
   if (['none', 'shadow-out', 'shadow-in', 'glow'].indexOf(a.bubbleEffect) >= 0) o.effect = a.bubbleEffect;
   return o;
 }
+function inkLookPatch(a) {
+  var o = {};
+  if (typeof a.inkColor === 'string' && /^#[0-9a-fA-F]{6}$/.test(a.inkColor)) o.inkColor = a.inkColor;
+  if (a.inkOpacity !== undefined && a.inkOpacity !== '') {
+    var n = parseInt(a.inkOpacity, 10);
+    if (!isNaN(n)) o.inkOpacity = Math.max(0, Math.min(100, n));
+  }
+  return o;
+}
 // set_status：这个角色的状态栏会变成什么样（只改写了的那几项）
 function statusLookPatch(a) {
   var o = {};
@@ -530,7 +562,7 @@ function runAction(a) {
         if (typeof a.css === 'string') dl.customCss = assistantCssPatch(dl.customCss, a, a.result);
         a.result.prevLook = JSON.parse(JSON.stringify(dl.look || {}));
         a.result.prevBubble = JSON.parse(JSON.stringify(dl.bubble || {}));
-        dl.look = Object.assign({}, dl.look || {}, dramaLookPatch(a), typeof a.showAvatar === 'boolean' ? { showAvatar: a.showAvatar } : {});
+        dl.look = Object.assign({}, dl.look || {}, dramaLookPatch(a), inkLookPatch(a), typeof a.showAvatar === 'boolean' ? { showAvatar: a.showAvatar } : {});
         var dramaBubble = bubblePatch(a, true);
         if (Object.keys(dramaBubble).length) dl.bubble = Object.assign({}, DEFAULT_BUBBLE, dl.bubble || {}, dramaBubble);
       } else {
@@ -538,7 +570,8 @@ function runAction(a) {
         if (typeof a.css === 'string') c.customCss = assistantCssPatch(c.customCss, a, a.result);
         var chatBubble = bubblePatch(a, false);
         if (Object.keys(chatBubble).length) c.bubble = Object.assign({}, DEFAULT_BUBBLE, c.bubble || {}, chatBubble);
-        if (typeof a.showAvatar === 'boolean') c.look = Object.assign({}, c.look || {}, { showAvatar: a.showAvatar });
+        var ink = inkLookPatch(a);
+        if (typeof a.showAvatar === 'boolean' || ink.inkColor || ink.inkOpacity !== undefined) c.look = Object.assign({}, c.look || {}, typeof a.showAvatar === 'boolean' ? { showAvatar: a.showAvatar } : {}, ink);
       }
       saveCharList();
       if (charList[openingChatCharIdx] === c) applyChatRoomStyle(c);
@@ -659,6 +692,8 @@ function paintActionCard(card, m) {
     if (bp.opacity !== undefined) line('透明度', bp.opacity + '%');
     if (bp.effect) line('效果', { none: '无', 'shadow-out': '外阴影', 'shadow-in': '内阴影', glow: '发光' }[bp.effect]);
     if (typeof a.showAvatar === 'boolean') line('消息头像', a.showAvatar ? '显示' : '不显示');
+    if (a.inkColor) line('小字背景颜色', a.inkColor);
+    if (a.inkOpacity !== undefined && a.inkOpacity !== '') line('小字背景透明度', a.inkOpacity + '%');
     if (a.view === 'drama' && a.format) line('剧情窗口格式', { bubble: '气泡', box: '文本框', custom: '自定义' }[a.format] || a.format);
     if (a.view === 'drama' && a.boxLayout) line('头像位置', { center: '居中', side: '左右', left: '左对齐' }[a.boxLayout] || a.boxLayout);
     if (a.view === 'drama' && a.boxStyle) line('文本框模板', ((typeof DRAMA_BOX_STYLES !== 'undefined' ? DRAMA_BOX_STYLES : []).filter(function(s) { return s.id === a.boxStyle; })[0] || { name: a.boxStyle }).name);

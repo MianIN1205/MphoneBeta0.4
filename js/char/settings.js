@@ -289,7 +289,7 @@ function readDiaryCfgForm() {
 document.getElementById('diaryAutoOn').addEventListener('change', function() {
   document.getElementById('diaryAutoSub').classList.toggle('open', this.checked);
 });
-var DEFAULT_LOOK = { showAvatar: true, headAvatar: false, headAlign: 'center', format: 'bubble', boxLayout: 'side', boxStyle: 'soft', boxMeta: true, boxActs: true, statusOn: false, statusDrama: false, statusFields: '心情,位置,在做什么,好感度', statusTpl: DEFAULT_STATUS_TPL, statusCss: '', statusFind: '', statusRules: '' };
+var DEFAULT_LOOK = { showAvatar: true, headAvatar: false, headAlign: 'center', format: 'bubble', boxLayout: 'side', boxStyle: 'soft', boxMeta: true, boxActs: true, inkColor: '#ffffff', inkOpacity: 42, statusOn: false, statusDrama: false, statusFields: '心情,位置,在做什么,好感度', statusTpl: DEFAULT_STATUS_TPL, statusCss: '', statusFind: '', statusRules: '' };
 
 // 表单里暂存的 USER 账号选择与各账号印象（切换账号时不丢）
 // csAccUid 为 '' 表示跟随主账号（「我的」里当前使用的账号）
@@ -449,6 +449,9 @@ function setLookForm(l) {
   renderDramaBoxStyles(l.boxStyle);
   document.getElementById('dramaBoxMeta').checked = l.boxMeta !== false;
   document.getElementById('dramaBoxActs').checked = l.boxActs !== false;
+  document.getElementById('inkColor').value = /^#[0-9a-fA-F]{6}$/.test(l.inkColor || '') ? l.inkColor : '#ffffff';
+  document.getElementById('inkOpacity').value = l.inkOpacity === undefined ? 42 : l.inkOpacity;
+  if (typeof updateInkSliderThumb === 'function') updateInkSliderThumb();
   document.getElementById('statusOn').checked = l.statusOn;
   document.getElementById('statusDrama').checked = !!l.statusDrama;
   document.getElementById('statusFields').value = l.statusFields;
@@ -473,6 +476,8 @@ function readLookForm() {
     boxStyle:     (document.querySelector('#dramaBoxStyleRow .drama-box-style.selected') || { dataset: { v: 'soft' } }).dataset.v,
     boxMeta:      document.getElementById('dramaBoxMeta').checked,
     boxActs:      document.getElementById('dramaBoxActs').checked,
+    inkColor:     document.getElementById('inkColor').value || '#ffffff',
+    inkOpacity:   Math.max(0, Math.min(100, parseInt(document.getElementById('inkOpacity').value, 10) || 0)),
     statusOn:     document.getElementById('statusOn').checked,
     statusDrama:  document.getElementById('statusDrama').checked,
     statusFields: document.getElementById('statusFields').value.trim() || DEFAULT_LOOK.statusFields,
@@ -940,10 +945,15 @@ function goCsPage(i, smooth) {
     csPages.scrollLeft = i * csPages.clientWidth;
     csPages.style.scrollBehavior = '';
     setCsTab(i, false);
+    if (i === 2) requestAnimationFrame(function() { if (typeof updateInkSliderThumb === 'function') updateInkSliderThumb(); });
     return;
   }
   csPages.scrollTo({ left: i * csPages.clientWidth, behavior: 'smooth' });
   setCsTab(i, true);
+  if (i === 2) requestAnimationFrame(function() {
+    if (typeof updateBubbleSliderThumb === 'function') updateBubbleSliderThumb();
+    if (typeof updateInkSliderThumb === 'function') updateInkSliderThumb();
+  });
 }
 function csTabWidth() {
   var tab = document.querySelector('#csTabs .cs-tab');

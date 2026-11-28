@@ -1,8 +1,8 @@
-// 眠花糖机 — 群聊里的多人小互动（用户要的）：投票、抽奖、拼手气红包。加号抽屉里由你发起，角色偶尔也会发（回复里写标签，js/chat/group.js 的 groupCommitReply 认）。
+// 眠花糖机 — 群聊里的多人小互动（用户要的）：投票、抽奖、红包。加号抽屉里由你发起，角色偶尔也会发（回复里写标签，js/chat/group.js 的 groupCommitReply 认）。
 // 消息上的 m.play：
 //   投票 { kind: 'vote', q, opts: [..], votes: { 角色id 或 'user': 选项序号 }, voting（正在等大家投） }
 //   抽奖 { kind: 'lottery', prize, who: [角色id 或 'user'], win, at（开奖动画从这时开始） }
-//   红包 { kind: 'hb', total, count, wish, parts: [每份多少], grabs: [{ who, amt, at }]（at 在未来的是还没抢到，到点才显示） }
+//   红包 { kind: 'hb', mode: luck 拼手气 / even 均分 / only 专属, only: 专属给谁, total, count, wish, parts: [每份多少], grabs: [{ who, amt, at }]（at 在未来的是还没抢到，到点才显示） }
 // 钱都走钱包（用户定的）：你发红包扣钱，抢到角色的红包进钱包；抽奖的奖品是文字，不扣钱。
 // 你发起的：结果出来后群里自动接着聊几句（sendMsg）；角色发起的不再自动接，免得一直连锁下去
 
@@ -34,9 +34,11 @@ function playTextForAI(m) {
   if (p.kind === 'hb') {
     var got = (p.grabs || []).filter(function(x) { return x.at <= Date.now(); });
     var best = gpHbBest(p);
-    return '（' + from + '发了一个拼手气红包「' + p.wish + '」，一共 ' + gpMoney(p.total) + '，分成 ' + p.count + ' 个；' +
-      (got.length ? got.map(function(x) { return who(x.who) + ' 抢到 ' + gpMoney(x.amt) + (best === x && got.length > 1 ? '（手气最佳）' : ''); }).join('，') : '还没人抢') +
-      (got.length >= p.count ? '，已经抢完了' : '') + '）';
+    var mode = gpHbMode(p);
+    var head = mode === 'even' ? '发了一个均分红包' : mode === 'only' ? ('发了一个专属红包，给 ' + who(p.only)) : '发了一个拼手气红包';
+    return '（' + from + head + '「' + p.wish + '」，一共 ' + gpMoney(p.total) + (mode === 'only' ? '' : '，分成 ' + p.count + ' 个') + '；' +
+      (got.length ? got.map(function(x) { return who(x.who) + ' 领到 ' + gpMoney(x.amt) + (best === x && got.length > 1 ? '（手气最佳）' : ''); }).join('，') : '还没人领') +
+      (got.length >= p.count ? '，已经领完了' : '') + '）';
   }
   return '';
 }
@@ -124,20 +126,29 @@ function gpPaintLottery(m, card) {
   })();
 }
 
+function gpHbMode(p) { return p.mode === 'even' || p.mode === 'only' ? p.mode : 'luck'; }
+function gpHbLabel(p) { return gpHbMode(p) === 'even' ? '均分红包' : gpHbMode(p) === 'only' ? '专属红包' : '拼手气红包'; }
 function gpHbBest(p) {
+  if (gpHbMode(p) !== 'luck') return null;
   var got = (p.grabs || []).filter(function(x) { return x.at <= Date.now(); }), best = null;
   if (got.length < p.count) return null;   // 抢完才有手气最佳
   got.forEach(function(x) { if (!best || x.amt > best.amt) best = x; });
   return best;
 }
 function gpPaintHb(m, card) {
-  var p = m.play, g = gpGroupOf(m), now = Date.now();
+  var p = m.play, g = gpGroupOf(m), now = Date.now(), mode = gpHbMode(p);
   var got = (p.grabs || []).filter(function(x) { return x.at <= now; });
   var mine = got.filter(function(x) { return x.who === 'user'; })[0];
   var over = got.length >= p.count;
-  card.innerHTML = '<div class="gp-hb-top"><div class="gp-hb-ic"></div><div><div class="gp-hb-wish"></div><div class="gp-hb-state"></div></div></div><div class="gp-hb-bottom">拼手气红包</div><div class="gp-hb-list"></div>';
+  var mineOnly = mode === 'only' && p.only && p.only !== 'user';
+  card.innerHTML = '<div class="gp-hb-top"><div class="gp-hb-ic"></div><div><div class="gp-hb-wish"></div><div class="gp-hb-state"></div></div></div><div class="gp-hb-bottom"></div><div class="gp-hb-list"></div>';
   card.querySelector('.gp-hb-wish').textContent = p.wish;
-  card.querySelector('.gp-hb-state').textContent = mine ? '你抢到了 ' + gpMoney(mine.amt) : over ? '已被抢完' : '还剩 ' + (p.count - got.length) + ' 个 · 点一下抢';
+  card.querySelector('.gp-hb-bottom').textContent = gpHbLabel(p);
+  card.querySelector('.gp-hb-state').textContent = mine ? '你领到了 ' + gpMoney(mine.amt)
+    : over ? '已经领完'
+    : mineOnly ? '给 ' + gpWho(p.only, g)
+    : mode === 'only' ? '点一下领取'
+    : '还剩 ' + (p.count - got.length) + ' 个 · 点一下领';
   card.classList.toggle('opened', !!mine || over);
   var best = gpHbBest(p);
   var listEl = card.querySelector('.gp-hb-list');
@@ -151,15 +162,15 @@ function gpPaintHb(m, card) {
   card.addEventListener('click', function(e) {
     e.stopPropagation();
     if (mine || over) return;
-    // 你来抢：拿下一份还没人要的
+    if (mineOnly) { showToast('这是给 ' + gpWho(p.only, g) + ' 的', 'plain'); return; }
     var taken = (p.grabs || []).length;
     if (taken >= p.count) { showToast('手慢了，红包派完了', 'plain'); return; }
     var amt = p.parts[taken];
     p.grabs.push({ who: 'user', amt: amt, at: Date.now() });
-    walletAdd(amt, '抢红包 · ' + (m.role === 'user' ? '自己发的红包' : gpWho(m.speaker, g) + '的红包'));
+    walletAdd(amt, '领红包 · ' + (m.role === 'user' ? '自己发的红包' : gpWho(m.speaker, g) + '的红包'));
     saveHistories();
     gpPaint(m);
-    showToast('抢到 ' + gpMoney(amt) + '，放进钱包了', 'success');
+    showToast('领到 ' + gpMoney(amt) + '，放进钱包了', 'success');
   });
 }
 
@@ -173,6 +184,30 @@ function gpSplit(total, n) {
   }
   out.push(left);
   return bbShuffleSafe(out).map(function(c) { return c / 100; });
+}
+function gpSplitEven(total, n) {
+  var cents = Math.round(total * 100), base = Math.floor(cents / n), extra = cents - base * n, out = [];
+  for (var i = 0; i < n; i++) out.push((base + (i < extra ? 1 : 0)) / 100);
+  return out;
+}
+function gpFindId(g, name) {
+  name = String(name || '').trim();
+  if (!name) return '';
+  if (name === '我' || name === '用户' || name === '{{user}}') return 'user';
+  var found = '';
+  groupMembers(g).forEach(function(c) {
+    if (found) return;
+    [c.charAlias, c.charName, groupLabel(c), typeof groupNick === 'function' ? groupNick(g, c) : ''].forEach(function(n) {
+      if (n && String(n).trim() === name) found = c.id;
+    });
+  });
+  return found;
+}
+function gpPlanOnly(p, exceptId) {
+  if (!p.only || p.only === 'user' || p.only === exceptId) return Date.now();
+  var at = Date.now() + 700 + Math.round(Math.random() * 900);
+  p.grabs = [{ who: p.only, amt: p.parts[0], at: at }];
+  return at;
 }
 function bbShuffleSafe(a) { for (var i = a.length - 1; i > 0; i--) { var j = Math.floor(Math.random() * (i + 1)), t = a[i]; a[i] = a[j]; a[j] = t; } return a; }
 // 角色们来抢：每人 80% 会抢、1～6 秒陆续抢到；limit 是最多几个人（角色发的给你留一个）
@@ -306,26 +341,53 @@ function gpOpenLottery() {
 function gpOpenHb() {
   var g = gpCurGroup(); if (!g) return;
   var n = groupMembers(g).length;
-  var ov = groupModal('<div class="mine-acc-title">发拼手气红包</div>' +
+  var mode = 'luck', onlyId = (g.members || [])[0] || '';
+  var ov = groupModal('<div class="mine-acc-title">发红包</div>' +
+    '<div class="pf-radio-row gp-hb-modes"><button type="button" class="pf-radio-btn selected" data-mode="luck">拼手气</button><button type="button" class="pf-radio-btn" data-mode="even">均分</button><button type="button" class="pf-radio-btn" data-mode="only">专属</button></div>' +
     '<div class="auto-row"><span class="auto-row-label">总金额（元）</span><input class="pet-edit-input" type="number" min="0.01" step="0.01" data-f="total" style="flex:1.2;"></div>' +
-    '<div class="auto-row"><span class="auto-row-label">红包个数</span><input class="pet-edit-input" type="number" min="1" max="' + (n + 1) + '" step="1" data-f="count" style="flex:1.2;"></div>' +
+    '<div class="auto-row" data-count-row><span class="auto-row-label">红包个数</span><input class="pet-edit-input" type="number" min="1" max="' + (n + 1) + '" step="1" data-f="count" style="flex:1.2;"></div>' +
+    '<div data-only hidden><div class="grp-label">给谁</div><div class="feed-visible-list grp-chips"></div></div>' +
     '<input class="pet-edit-input" maxlength="20" placeholder="恭喜发财，大吉大利" data-f="wish">' +
-    '<div class="auto-hint gp-hb-bal"></div>' +
+    '<div class="auto-hint gp-hb-bal"></div><div class="auto-hint gp-hb-tip"></div>' +
     '<div class="mine-acc-actions"><button class="mine-acc-btn mine-acc-btn-close" data-act="cancel">取消</button><button class="mine-acc-btn mine-acc-btn-add gp-hb-send" data-act="ok">塞钱进红包</button></div>');
   ov.querySelector('[data-f="count"]').value = n;
+  var chips = ov.querySelector('.grp-chips');
+  (g.members || []).forEach(function(id) {
+    var s = document.createElement('span');
+    s.className = 'feed-visible-chip' + (id === onlyId ? ' on' : '');
+    s.textContent = gpWho(id, g);
+    s.addEventListener('click', function() {
+      onlyId = id;
+      Array.prototype.forEach.call(chips.children, function(el) { el.classList.remove('on'); });
+      s.classList.add('on');
+    });
+    chips.appendChild(s);
+  });
+  function syncMode() {
+    ov.querySelectorAll('[data-mode]').forEach(function(b) { b.classList.toggle('selected', b.getAttribute('data-mode') === mode); });
+    ov.querySelector('[data-count-row]').hidden = mode === 'only';
+    ov.querySelector('[data-only]').hidden = mode !== 'only';
+    ov.querySelector('.gp-hb-tip').textContent = mode === 'even' ? '每个人分到的一样多。' : mode === 'only' ? '只有选中的那个人能领。' : '金额随机，领完才有手气最佳。';
+  }
+  ov.querySelectorAll('[data-mode]').forEach(function(b) {
+    b.addEventListener('click', function() { mode = b.getAttribute('data-mode'); syncMode(); });
+  });
   ov.querySelector('.gp-hb-bal').textContent = '钱包余额 ' + gpMoney(getWallet(getMainAccount().uid).balance) + '，群里有 ' + n + ' 个角色';
+  syncMode();
   ov.querySelector('[data-act="cancel"]').addEventListener('click', function() { ov.remove(); });
   ov.querySelector('[data-act="ok"]').addEventListener('click', function() {
     var total = Math.round(parseFloat(ov.querySelector('[data-f="total"]').value) * 100) / 100;
-    var count = parseInt(ov.querySelector('[data-f="count"]').value, 10);
+    var count = mode === 'only' ? 1 : parseInt(ov.querySelector('[data-f="count"]').value, 10);
+    if (mode === 'only' && !onlyId) { showToast('先选给谁', 'error'); return; }
     if (!(count >= 1 && count <= n + 1)) { shakeEl(ov.querySelector('[data-f="count"]')); showToast('个数写 1～' + (n + 1), 'error'); return; }
     if (!(total >= count * 0.01)) { shakeEl(ov.querySelector('[data-f="total"]')); showToast('每个红包至少 0.01 元', 'error'); return; }
     if (total > getWallet(getMainAccount().uid).balance) { showToast('钱包余额不够啦', 'error'); return; }
+    var wish = ov.querySelector('[data-f="wish"]').value.trim() || '恭喜发财，大吉大利';
     ov.remove(); closeCrPlusPanel();
     walletAdd(-total, '群红包 · ' + (g.charName || '群聊'));
-    var p = { kind: 'hb', total: total, count: count, wish: ov.querySelector('[data-f="wish"]').value.trim() || '恭喜发财，大吉大利', parts: gpSplit(total, count), grabs: [] };
+    var p = { kind: 'hb', mode: mode, only: mode === 'only' ? onlyId : '', total: total, count: count, wish: wish, parts: mode === 'luck' ? gpSplit(total, count) : gpSplitEven(total, count), grabs: [] };
     var m = { role: 'user', content: '[红包] ' + p.wish, play: p, time: Date.now() };
-    var end = gpPlanGrabs(g, p, null, count);
+    var end = mode === 'only' ? gpPlanOnly(p, null) : gpPlanGrabs(g, p, null, count);
     gpPush(g, m);
     gpTimers(g, m);
     if (p.grabs.length) setTimeout(function() { gpReact(g); }, end - Date.now() + 800);
@@ -349,19 +411,27 @@ function gpFromTag(kind, attrs, body, g, speakerId) {
     return { kind: 'lottery', prize: body.slice(0, 30), who: who, win: who[Math.floor(Math.random() * who.length)], at: Date.now() };
   }
   var total = Math.min(GP_HB_MAX_AI, Math.max(0.01, Math.round(parseFloat(attr('金额')) * 100) / 100 || 8.88));
-  var count = Math.max(1, Math.min((g.members || []).length, parseInt(attr('个数'), 10) || (g.members || []).length));
-  if (total < count * 0.01) total = count * 0.01;
-  return { kind: 'hb', total: total, count: count, wish: (body || '恭喜发财，大吉大利').slice(0, 20), parts: gpSplit(total, count), grabs: [] };
+  var how = attr('方式');
+  var mode = how.indexOf('均') >= 0 ? 'even' : how.indexOf('专') >= 0 ? 'only' : 'luck';
+  var only = mode === 'only' ? gpFindId(g, attr('给') || attr('对象')) : '';
+  if (mode === 'only' && !only) mode = 'luck';
+  var count = mode === 'only' ? 1 : Math.max(1, Math.min((g.members || []).length, parseInt(attr('个数'), 10) || (g.members || []).length));
+  if (total < count * 0.01) total = Math.round(count * 0.01 * 100) / 100;
+  return { kind: 'hb', mode: mode, only: only, total: total, count: count, wish: (body || '恭喜发财，大吉大利').slice(0, 20), parts: mode === 'luck' ? gpSplit(total, count) : gpSplitEven(total, count), grabs: [] };
 }
 // 消息进了记录以后：角色发的投票大家来投、红包大家来抢（给你留一个）
 function gpAfterAdd(g, m) {
   var p = m.play;
   if (p.kind === 'vote') setTimeout(function() { gpVoteRound(g, m); }, 600);
-  else if (p.kind === 'hb') { gpPlanGrabs(g, p, m.speaker, Math.max(0, p.count - 1)); saveHistories(); gpTimers(g, m); }
+  else if (p.kind === 'hb') {
+    if (p.mode === 'only') gpPlanOnly(p, m.speaker);
+    else gpPlanGrabs(g, p, m.speaker, Math.max(0, p.count - 1));
+    saveHistories(); gpTimers(g, m);
+  }
 }
 function gpTagRule() {
   return '偶尔（很少，真的有需要或者心情特别好的时候）群里有人可以发起小互动，写在这个人那一行里：发投票 <投票 题目="周末去哪玩">海边｜爬山｜在家躺着</投票>；' +
-    '发拼手气红包 <红包 金额="66" 个数="3">祝福语</红包>（金额 1～' + GP_HB_MAX_AI + '，个数不超过群里人数）；发抽奖 <抽奖>奖品</抽奖>。不要每次都发。';
+    '发红包 <红包 金额="66" 个数="3" 方式="拼手气">祝福语</红包>，方式还可以写成「均分」或「专属」。专属要再写 给="一个成员的名字"，个数不用写。金额 1～' + GP_HB_MAX_AI + '，个数不超过群里人数。发抽奖 <抽奖>奖品</抽奖>。不要每次都发。';
 }
 
 // 打开聊天室时：群里不显示查手机、一起看，换成投票、抽奖（css/chat/group.css 按 #appChatRoom.is-group 切）

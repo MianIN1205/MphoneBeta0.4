@@ -425,22 +425,22 @@
 #appChatRoom:not(.cr-qb-in-nav) #chatMsgList .cr-time-sep,
 #appChatRoom:not(.cr-qb-in-nav) #chatMsgList .cr-pat-notice:not(.cr-whisper-notice),
 #appChatRoom:not(.cr-qb-in-nav) #chatMsgList .cr-recall-notice:not(.cr-whisper-notice) {
-  background: rgba(255,255,255,0.78);
+  background: rgba(255,255,255,0.42);
   border-radius: 8px;
   padding: 3px 14px;
 }
 #appChatRoom:not(.cr-qb-in-nav) #chatMsgList .cr-speaker {
   width: fit-content; max-width: calc(100% - 48px);
   padding: 0 8px; border-radius: 7px;
-  background: rgba(255,255,255,0.78);
+  background: rgba(255,255,255,0.42);
 }
 #appChatRoom:not(.cr-qb-in-nav) #chatMsgList .cr-action-note {
   width: fit-content; border-radius: 8px;
-  background: rgba(255,255,255,0.72);
+  background: rgba(255,255,255,0.38);
 }
 #appChatRoom:not(.cr-qb-in-nav) #chatMsgList .chat-msg-bubble.cr-action-only {
   width: fit-content; border-radius: 8px;
-  background: rgba(255,255,255,0.72) !important;
+  background: rgba(255,255,255,0.38) !important;
 }
 /* 思维链折叠条（js/chat/render.js 的 renderThinkBar）：很小、灰色，点开看思考 */
 .cr-think-bar { align-self: flex-start; max-width: 80%; margin: 2px 0 -2px 48px; flex-shrink: 0; }

@@ -279,7 +279,7 @@ function groupFormatRules(g) {
     '【群聊回复格式】接着群里的聊天往下说：不是每个人每次都要开口，谁会接这个话题谁就说，一共 ' + groupReplyN(g) + ' 条，像真的群聊一样有来有回、有人插话。' +
     '每条单独一行，开头写说话人的名字和冒号（名字只能是：' + names.join('、') + '），比如：\n' +
     names.slice(0, 2).map(function(n, i) { return n + '：' + (i ? '我在我在！' : '在吗。'); }).join('\n') +
-    '\n' + (typeof gpTagRule === 'function' ? gpTagRule() : '') + groupModRule(g) + groupWhisperRule(g) + (groupPatOn(g) ? '\n有人拍了拍某个成员时，被拍的人若想回拍，在自己那一行写 <拍一拍/>，表示拍了拍{{user}}。很少用，不要每轮都拍。' : '') + '\n骰子和猜拳按自己的性子决定发不发，不是每个人都要发。想发的人夹在自己的话中间，单独一行写 <骰子/> 或 <猜拳/>，小手机会给这个人随机一个结果。不要自己写点数，也不要写自己出了石头、剪刀或布。\n同一个人连着说几句可以写在一行里，每句照常写标点，小手机会按句子分成气泡。像平时发微信一样说话，口语、短句；' + (groupActionOn(g) ? '想写动作、神态时用 *星号* 包起来放在那个人那一行里（会显示成灰色小字），不写旁白和括号说明' : '不写旁白、动作描写和括号说明') + '，不替{{user}}说话。' + langLine + trLine) }];
+    '\n' + (typeof gpTagRule === 'function' ? gpTagRule() : '') + groupModRule(g) + groupWhisperRule(g) + (groupPatOn(g) ? '\n有人拍了拍某个成员时，被拍的人若想回拍，在自己那一行写 <拍一拍/>，表示拍了拍{{user}}。很少用，不要每轮都拍。' : '') + '\n骰子、猜拳和正反硬币按自己的性子决定发不发，不是每个人都要发。想发的人夹在自己的话中间，单独一行写 <骰子/>、<猜拳/> 或 <硬币/>，小手机会给这个人随机一个结果。不要自己写点数，也不要写自己出了石头、剪刀、布，或自己写 YES 还是 NO。\n同一个人连着说几句可以写在一行里，每句照常写标点，小手机会按句子分成气泡。像平时发微信一样说话，口语、短句；' + (groupActionOn(g) ? '想写动作、神态时用 *星号* 包起来放在那个人那一行里（会显示成灰色小字），不写旁白和括号说明' : '不写旁白、动作描写和括号说明') + '，不替{{user}}说话。' + langLine + trLine) }];
 }
 
 // ---------- 成员各用自己的模型（群设置里开，参考别的小手机）：一个个人单独问一遍，后面的人看得到前面的人刚说了什么 ----------
@@ -325,7 +325,7 @@ function groupCommitReply(g, hist, raw, list) {
   raw = raw.replace(/<悄悄话([^>]*)>([\s\S]*?)<\/悄悄话>/g, function(_, attrs, body) { plays.push(['%悄悄话', attrs, body]); return '\u0001P' + (plays.length - 1) + '\u0001'; });
   raw = raw.replace(/<(禁言|解除禁言)([^>]*?)\/?>(\s*<\/\1>)?/g, function(_, kind, attrs) { plays.push(['@' + kind, attrs, '']); return '\u0001P' + (plays.length - 1) + '\u0001'; });
   raw = raw.replace(/<拍一拍\s*\/?>(\s*<\/拍一拍>)?/g, function() { plays.push(['拍一拍', '', '']); return '\u0001P' + (plays.length - 1) + '\u0001'; });
-  raw = raw.replace(/<(骰子|猜拳)\s*\/?>(\s*<\/\1>)?/g, function(_, name) { plays.push([name, '', '']); return '\u0001P' + (plays.length - 1) + '\u0001'; });
+  raw = raw.replace(/<(骰子|猜拳|硬币)\s*\/?>(\s*<\/\1>)?/g, function(_, name) { plays.push([name, '', '']); return '\u0001P' + (plays.length - 1) + '\u0001'; });
   raw = raw.replace(/<status>[\s\S]*?(<\/status>|$)/gi, '').replace(/<([一-鿿A-Za-z]+)[^>]*>[\s\S]*?<\/\1>/g, '').replace(/<[一-鿿]+[^>]*\/>/g, '');
   var members = groupMembers(g), byName = {};
   members.forEach(function(c) {
@@ -350,10 +350,11 @@ function groupCommitReply(g, hist, raw, list) {
       if (k % 2) {   // 占位：这个人发起的投票 / 红包 / 抽奖
         var t = plays[+piece];
         if (t && t[0] === '拍一拍') { if (groupPatOn(g)) added.push({ role: 'assistant', content: '', pat: 'user', patWho: s.id, speaker: s.id, time: now }); return; }
-        if (t && (t[0] === '骰子' || t[0] === '猜拳')) {
+        if (t && (t[0] === '骰子' || t[0] === '猜拳' || t[0] === '硬币')) {
           if (!gameSeen[s.id] && typeof gameRoll === 'function') {
             gameSeen[s.id] = 1;
-            added.push({ role: 'assistant', content: '', speaker: s.id, time: now, game: { kind: t[0] === '猜拳' ? 'rps' : 'dice', value: gameRoll(t[0] === '猜拳' ? 'rps' : 'dice') }, _spin: true });
+            var gk = typeof gameKindName === 'function' ? gameKindName(t[0]) : (t[0] === '猜拳' ? 'rps' : 'dice');
+            added.push({ role: 'assistant', content: '', speaker: s.id, time: now, game: { kind: gk, value: gameRoll(gk) }, _spin: true });
           }
           return;
         }
@@ -615,6 +616,9 @@ function grpSliderThumb() {
   var val = parseInt(sl.value, 10) || 0;
   document.getElementById('grpOpacityVal').textContent = val + '%';
   th.style.left = (val / 100 * sl.offsetWidth) + 'px';
+  var ink = document.getElementById('grpInkOpacity');
+  var inkTh = document.getElementById('grpInkThumb');
+  if (ink && inkTh) inkTh.style.left = ((parseInt(ink.value, 10) || 0) / 100 * ink.offsetWidth) + 'px';
 }
 function grpPaintLook() {
   var e = grpEdit;
@@ -659,6 +663,11 @@ function grpPaintLook() {
   var sl = document.getElementById('grpOpacity');
   if (document.activeElement !== sl) sl.value = e.bubble.opacity;
   grpSliderThumb();
+  var inkColor = document.getElementById('grpInkColor');
+  var inkOp = document.getElementById('grpInkOpacity');
+  if (document.activeElement !== inkColor) inkColor.value = /^#[0-9a-fA-F]{6}$/.test(e.look.inkColor || '') ? e.look.inkColor : '#ffffff';
+  if (document.activeElement !== inkOp) inkOp.value = e.look.inkOpacity === undefined ? 42 : e.look.inkOpacity;
+  document.getElementById('grpInkOpacityVal').textContent = inkOp.value + '%';
   grpOptRow(document.getElementById('grpHeadAlign'), [['center', '居中'], ['left', '居左']], e.look.headAlign || 'center', function(v) { e.look.headAlign = v; grpPaintLook(); });
   var dl = e.drama && e.drama.look || {};
   var dfmt = dl.format === 'text' ? 'box' : (dl.format || 'bubble');
@@ -680,6 +689,26 @@ document.getElementById('grpOpacity').addEventListener('input', function() {
   grpEdit.bubble.opacity = parseInt(this.value, 10);
   grpSliderThumb();
   grpBubbleTplCss();
+});
+function grpPreviewInk() {
+  var g = grpEdit && grpEdit.g;
+  if (!g || charList[openingChatCharIdx] !== g || typeof applyChatRoomStyle !== 'function') return;
+  var saved = g.look;
+  g.look = Object.assign({}, saved, { inkColor: grpEdit.look.inkColor, inkOpacity: grpEdit.look.inkOpacity });
+  applyChatRoomStyle(g);
+  g.look = saved;
+}
+document.getElementById('grpInkColor').addEventListener('input', function() {
+  if (!grpEdit) return;
+  grpEdit.look.inkColor = this.value;
+  grpPreviewInk();
+});
+document.getElementById('grpInkOpacity').addEventListener('input', function() {
+  if (!grpEdit) return;
+  grpEdit.look.inkOpacity = Math.max(0, Math.min(100, parseInt(this.value, 10) || 0));
+  document.getElementById('grpInkOpacityVal').textContent = grpEdit.look.inkOpacity + '%';
+  grpSliderThumb();
+  grpPreviewInk();
 });
 document.querySelectorAll('#grpBubbleColors .bubble-preset-item').forEach(function(el) {
   el.addEventListener('click', function() {
@@ -980,7 +1009,12 @@ function grpAfterMemberChange(g) {
   if (charList[openingChatCharIdx] === g) { chatRoomTitle.textContent = groupTitle(g); paintChatSubTitle(g); }
   renderChatCharList();
 }
-function closeGroupSetting() { appGroupSetting.classList.remove('active'); grpEdit = null; }
+function closeGroupSetting() {
+  var g = grpEdit && grpEdit.g;
+  appGroupSetting.classList.remove('active');
+  grpEdit = null;
+  if (g && charList[openingChatCharIdx] === g && typeof applyChatRoomStyle === 'function') applyChatRoomStyle(g);
+}
 document.getElementById('backGroupSetting').addEventListener('click', closeGroupSetting);
 document.getElementById('grpWbHeader').addEventListener('click', function() {
   var box = document.getElementById('grpWbContent');
@@ -1038,7 +1072,9 @@ document.getElementById('groupSaveBtn').addEventListener('click', function() {
       boxActs: document.getElementById('grpDramaActs').checked,
       showAvatar: g.look.showAvatar,
       headAvatar: g.look.headAvatar,
-      headAlign: g.look.headAlign
+      headAlign: g.look.headAlign,
+      inkColor: g.look.inkColor,
+      inkOpacity: g.look.inkOpacity
     });
     e.drama.customCss = document.getElementById('grpDramaCss').value;
     e.drama.chatBg = Object.assign({}, e.bg);

@@ -218,7 +218,7 @@ function sendPickedImage(files) {
         var funcName = this.dataset.func || '';
         var curC = charList[openingChatCharIdx];
         if (curC && curC.isGroup && (funcName === '查手机' || funcName === '一起看')) { showToast('群聊里用不了「' + funcName + '」', 'plain'); return; }
-        // 群里的小互动（js/chat/group-play.js）：投票、抽奖、拼手气红包
+        // 群里的小互动（js/chat/group-play.js）：投票、抽奖、红包。私聊没有红包，群聊没有转账
         if (curC && curC.isGroup && typeof gpOpenVote === 'function' && { '投票': 1, '抽奖': 1, '红包': 1 }[funcName]) {
           (funcName === '投票' ? gpOpenVote : funcName === '抽奖' ? gpOpenLottery : gpOpenHb)();
           return;
@@ -227,7 +227,9 @@ function sendPickedImage(files) {
           // 抽屉先不收，小菜单从「相册」这个图标上方冒出来（用户要的）；选好了再收
           if (typeof openAlbumPick === 'function') openAlbumPick(this.querySelector('.cr-plus-box') || this);
           else { closeCrPlusPanel(); crAlbumFileInput.value = ''; crAlbumFileInput.click(); }
-        } else if (['通话', '位置', '礼物', '转账'].indexOf(funcName) >= 0) {
+        } else if (funcName === '通话' && typeof openCallPick === 'function') {
+          openCallPick(this.querySelector('.cr-plus-box') || this);
+        } else if (['位置', '礼物', '转账'].indexOf(funcName) >= 0) {
           openPrivatePlus(funcName);
         } else if (funcName === '文件' && typeof openChatFilePicker === 'function') {
           openChatFilePicker();
@@ -247,8 +249,6 @@ function sendPickedImage(files) {
         } else if (funcName === '占卜' && curC && !curC.isGroup) {
           closeCrPlusPanel();
           openTarotReading(curC);
-        } else if ((funcName === '骰子' || funcName === '猜拳') && typeof sendGame === 'function') {
-          sendGame(funcName === '猜拳' ? 'rps' : 'dice');
         } else {
           showToast('「' + funcName + '」功能开发中', 'success');
         }
@@ -286,19 +286,30 @@ function sendPickedImage(files) {
     return list.indexOf(name) === index && plusItems.some(function(item) { return item.dataset.func === name; });
   }).slice(0, pinMax);
 
-  function inGroupRoom() { return appChatRoom.classList.contains('is-group'); }
+  function plusRoomKey() {
+    return (appChatRoom.classList.contains('is-group') ? 'g' : 'p') + (appChatRoom.classList.contains('cr-drama') ? 'd' : 'c');
+  }
+  function plusHiddenHere(item) {
+    var group = appChatRoom.classList.contains('is-group');
+    var drama = appChatRoom.classList.contains('cr-drama');
+    if (item.classList.contains('group-only') && (!group || drama)) return true;
+    if (group && item.classList.contains('private-only')) return true;
+    if (group && (item.dataset.func === '查手机' || item.dataset.func === '一起看')) return true;
+    return false;
+  }
   function renderPlusOrder() {
-    var group = inGroupRoom();
-    if (plusOrderMode === group) return;
-    plusOrderMode = group;
-    var visible = plusItems.filter(function(item) { return group ? !item.classList.contains('private-only') : !item.classList.contains('group-only'); });
+    var key = plusRoomKey();
+    var changed = plusOrderMode !== key;
+    plusOrderMode = key;
+    var visible = plusItems.filter(function(item) { return !plusHiddenHere(item); });
     var hidden = plusItems.filter(function(item) { return visible.indexOf(item) === -1; });
     var pinned = plusPins.map(function(name) {
       return visible.find(function(item) { return item.dataset.func === name; });
     }).filter(Boolean);
-    var order = pinned.concat(visible.filter(function(item) { return pinned.indexOf(item) === -1; }), hidden);
+    var order = pinned.concat(visible.filter(function(item) { return pinned.indexOf(item) === -1; }));
     order.forEach(function(item, index) { plusGrids[index < 8 ? 0 : 1].appendChild(item); });
-    plusPages.scrollLeft = 0;
+    hidden.forEach(function(item) { plusGrids[1].appendChild(item); });
+    if (changed) plusPages.scrollLeft = 0;
   }
   function closePlusPins() { pinOverlay.classList.remove('open'); }
   function checkedPlusPins() {
@@ -322,7 +333,7 @@ function sendPickedImage(files) {
       input.value = item.dataset.func;
       input.checked = plusPins.indexOf(input.value) >= 0;
       label.appendChild(input);
-      label.appendChild(document.createTextNode(input.value + (item.classList.contains('group-only') ? ' · 群聊' : '')));
+      label.appendChild(document.createTextNode(input.value + (item.classList.contains('group-only') ? ' · 群聊' : item.classList.contains('private-only') ? ' · 私聊' : '')));
       pinChoices.appendChild(label);
     });
     // 通过选择先后决定顺序，取消再勾选即可调整。

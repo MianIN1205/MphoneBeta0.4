@@ -210,7 +210,21 @@
 .cr-dice[data-face="6"] i:nth-child(7),
 .cr-dice[data-face="6"] i:nth-child(9) { background: #2a2a2a; }
 .cr-rps { font-size: 36px; line-height: 1; width: 46px; height: 46px; display: flex; align-items: center; justify-content: center; }
-.cr-game.spin .cr-dice, .cr-game.spin .cr-rps { animation: cr-game-toss .14s linear infinite; }
+.cr-coin {
+  width: 42px; height: 42px; box-sizing: border-box; border-radius: 50%;
+  border: 2.5px solid #c5ced8; padding: 2px;
+  background: linear-gradient(160deg, #f7f8fa, #b7c1cd);
+  display: flex; align-items: center; justify-content: center;
+}
+.cr-coin-face {
+  width: 100%; height: 100%; border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  background: radial-gradient(circle at 34% 30%, #fff 0%, #eef1f5 48%, #d5dbe3 100%);
+  box-shadow: inset 0 2px 4px rgba(55, 65, 80, 0.32);
+  color: #4c5663; font-size: 10px; font-weight: 600; letter-spacing: 0.04em;
+  text-shadow: 0 1px 0 rgba(255, 255, 255, 0.9), 0 1px 2px rgba(36, 44, 56, 0.4);
+}
+.cr-game.spin .cr-dice, .cr-game.spin .cr-rps, .cr-game.spin .cr-coin { animation: cr-game-toss .14s linear infinite; }
 @keyframes cr-game-toss {
   0% { transform: rotate(-10deg) scale(.9); }
   50% { transform: rotate(10deg) scale(1); }

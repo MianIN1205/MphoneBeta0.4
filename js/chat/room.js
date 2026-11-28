@@ -245,7 +245,19 @@ function lookCss(part, scope) {
   }
   // 文本框（剧情窗口）：像酒馆那样一整块带框的；风格从 DRAMA_BOX_STYLES 里选（柔和的底色用主题颜色），连着的合成一个框（框的上下边不画，连成一块）
   if (look.format === 'box') css += dramaBoxCss(sel, look) + dramaBoxStyleCss(sel, look, colors, op);
+  css += inkCss(scope, look);
   return css;
+}
+// 铺在背景上的小字背景：时间、拍一拍、撤回、说话人名字、动作小字。颜色和透明度在美化里设
+function inkCss(scope, look) {
+  var color = /^#[0-9a-fA-F]{6}$/.test(look.inkColor || '') ? look.inkColor : '#ffffff';
+  var op = look.inkOpacity === undefined || look.inkOpacity === '' ? 42 : parseInt(look.inkOpacity, 10);
+  if (isNaN(op)) op = 42;
+  op = Math.max(0, Math.min(100, op)) / 100;
+  var bg = op ? hexToRgba(color, op) : 'transparent';
+  var bits = ['.cr-time-sep', '.cr-pat-notice:not(.cr-whisper-notice)', '.cr-recall-notice:not(.cr-whisper-notice)', '.cr-speaker', '.cr-action-note', '.chat-msg-bubble.cr-action-only'];
+  return bits.map(function(s) { return scope + ':not(.cr-qb-in-nav) ' + s; }).join(',\n') +
+    ' { background: ' + bg + ' !important; }\n';
 }
 // 当前子视图（聊天 / 剧情）用的那套美化
 // 聊天窗口、剧情窗口的美化各管各的（用户要的，不能互相影响）：

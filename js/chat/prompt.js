@@ -65,7 +65,7 @@ function chatFormatRules(char) {
   if (c.patOn) {
     rules.push('你也可以像微信一样拍一拍用户：想拍的时候在全部消息最后另起一行写 <拍一拍/>（偶尔用，不要每次都拍）。用户拍你时，记录里会出现「（用户拍了拍你…）」。');
   }
-  rules.push('想玩的时候可以夹在聊天里：单独一行写 <骰子/> 或 <猜拳/>，小手机会随机出结果。按自己的性子来，不是每次都玩。不要自己写掷出几点，也不要写自己出了石头、剪刀或布。');
+  rules.push('想玩的时候可以夹在聊天里：单独一行写 <骰子/>、<猜拳/> 或 <硬币/>，小手机会随机出结果。硬币只有 YES 和 NO。按自己的性子来，不是每次都玩。不要自己写掷出几点，也不要写自己出了石头、剪刀、布，或自己写 YES 还是 NO。');
   // 待关心、补人设、防复读（js/char/life.js）
   if (typeof lifeFormatRules === 'function') lifeFormatRules(char).forEach(function(r) { rules.push(r); });
   // 帮{{user}}记现实里的东西（js/chat/assets.js）

@@ -130,6 +130,15 @@
   filter: drop-shadow(0 1px 3px rgba(180,60,60,0.22));
   transition: left 0.04s linear;
 }
+.ink-row { display: flex; align-items: center; gap: 10px; }
+.ink-color {
+  width: 34px; height: 28px; padding: 0; border: 1px solid rgba(200,170,175,0.55);
+  border-radius: 8px; background: none; cursor: pointer; flex-shrink: 0;
+}
+.ink-color::-webkit-color-swatch-wrapper { padding: 2px; }
+.ink-color::-webkit-color-swatch { border: none; border-radius: 6px; }
+.ink-row .bubble-slider-wrapper { flex: 1; min-width: 0; }
+.ink-row .bubble-opacity-value { flex-shrink: 0; }
 
 /* 气泡效果 chips */
 .bubble-effect-section {

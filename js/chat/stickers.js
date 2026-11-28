@@ -9,44 +9,46 @@
 // =============================================
 var stkData = mphoneStore.load('mphone_stickers', null);
 if (!stkData || !Array.isArray(stkData.cats) || !Array.isArray(stkData.items)) stkData = { cats: [], items: [] };
+// 第三个是以前的长名字。已经存过的，只有还叫旧名字时才换成短的，自己改过的不动。
+var STK_DEFAULTS = [
+  ["little-heart", "爱心", "给你比心"],
+  ["happy-face", "开心", "开心一下"],
+  ["emoji-03", "笑哭", "笑出眼泪"],
+  ["emoji-04", "拜托", "拜托拜托"],
+  ["emoji-05", "大哭", "放声哭哭"],
+  ["emoji-06", "脸红", "脸红了"],
+  ["emoji-07", "哼哼", "哼一声"],
+  ["emoji-08", "白眼", "翻个白眼"],
+  ["emoji-09", "犯困", "困困"],
+  ["emoji-10", "墨镜", "戴上墨镜"],
+  ["emoji-11", "比心", "双手比心"],
+  ["emoji-12", "抱抱", "抱抱你"],
+  ["emoji-13", "亲亲", "亲一口"],
+  ["emoji-14", "偷笑", "偷偷笑"],
+  ["emoji-15", "得意", "得意一下"],
+  ["emoji-16", "吃惊", "吃惊了"],
+  ["emoji-17", "紧张", "有点紧张"],
+  ["emoji-18", "思考", "让我想想"],
+  ["emoji-19", "捂眼", "捂住眼睛"],
+  ["emoji-20", "乖巧", "乖巧一下"],
+  ["emoji-21", "点赞", "给你点赞"],
+  ["emoji-22", "鼓掌", "鼓掌鼓掌"],
+  ["emoji-23", "欢呼", "举手欢呼"],
+  ["emoji-24", "谢谢", "双手合十"],
+  ["emoji-25", "盯着", "盯着看"],
+  ["emoji-26", "闪亮", "亮闪闪"],
+  ["emoji-27", "庆祝", "庆祝一下"],
+  ["emoji-28", "信封", "给你的信"],
+  ["emoji-29", "鲜花", "送你郁金香"],
+  ["emoji-30", "喝茶", "喝杯热的"]
+];
 if (!stkData.emojiPackAdded) {
   var defaultCat = stkCatByName('自带');
   if (!defaultCat) {
     defaultCat = { id: 'sc-mphone-defaults', name: '自带' };
     stkData.cats.unshift(defaultCat);
   }
-  [
-    ["little-heart", "给你比心"],
-    ["happy-face", "开心一下"],
-    ["emoji-03", "笑出眼泪"],
-    ["emoji-04", "拜托拜托"],
-    ["emoji-05", "放声哭哭"],
-    ["emoji-06", "脸红了"],
-    ["emoji-07", "哼一声"],
-    ["emoji-08", "翻个白眼"],
-    ["emoji-09", "困困"],
-    ["emoji-10", "戴上墨镜"],
-    ["emoji-11", "双手比心"],
-    ["emoji-12", "抱抱你"],
-    ["emoji-13", "亲一口"],
-    ["emoji-14", "偷偷笑"],
-    ["emoji-15", "得意一下"],
-    ["emoji-16", "吃惊了"],
-    ["emoji-17", "有点紧张"],
-    ["emoji-18", "让我想想"],
-    ["emoji-19", "捂住眼睛"],
-    ["emoji-20", "乖巧一下"],
-    ["emoji-21", "给你点赞"],
-    ["emoji-22", "鼓掌鼓掌"],
-    ["emoji-23", "举手欢呼"],
-    ["emoji-24", "双手合十"],
-    ["emoji-25", "盯着看"],
-    ["emoji-26", "亮闪闪"],
-    ["emoji-27", "庆祝一下"],
-    ["emoji-28", "给你的信"],
-    ["emoji-29", "送你郁金香"],
-    ["emoji-30", "喝杯热的"]
-  ].forEach(function(entry) {
+  STK_DEFAULTS.forEach(function(entry) {
     var file = entry[0], url = './icons/stickers/' + file + '.png';
     if (!stkData.items.some(function(item) { return item.url === url; })) {
       stkData.items.push({ id: 'sk-mphone-' + file, name: entry[1], cat: defaultCat.id, url: url });
@@ -56,6 +58,12 @@ if (!stkData.emojiPackAdded) {
   stkData.emojiPackAdded = true;
   saveStickers();
 }
+var stkNamesShortened = false;
+STK_DEFAULTS.forEach(function(entry) {
+  var item = stkData.items.filter(function(s) { return s.id === 'sk-mphone-' + entry[0]; })[0];
+  if (item && item.name === entry[2]) { item.name = entry[1]; stkNamesShortened = true; }
+});
+if (stkNamesShortened) saveStickers();
 var stkCurCat = stkData.cats.length ? stkData.cats[0].id : '';
 
 function saveStickers() { mphoneStore.save('mphone_stickers', stkData); }
@@ -230,6 +238,26 @@ stkGrid.addEventListener('click', function(event) {
   event.stopPropagation();
 }, true);
 
+function stkGameCell(kind, label) {
+  var item = document.createElement('button');
+  item.type = 'button';
+  item.className = 'stk-item stk-game';
+  var box = document.createElement('div');
+  box.className = 'stk-thumb';
+  if (kind === 'dice' && typeof gameDiceEl === 'function') box.appendChild(gameDiceEl(5));
+  else if (kind === 'rps' && typeof gameRpsEl === 'function') box.appendChild(gameRpsEl('剪刀'));
+  else if (kind === 'coin' && typeof gameCoinEl === 'function') box.appendChild(gameCoinEl('YES'));
+  var name = document.createElement('div');
+  name.className = 'stk-name';
+  name.textContent = label;
+  item.appendChild(box);
+  item.appendChild(name);
+  item.addEventListener('click', function(e) {
+    e.stopPropagation();
+    if (typeof sendGame === 'function') sendGame(kind);
+  });
+  return item;
+}
 function renderStickerDrawer() {
   if (!stkCat(stkCurCat)) {
     stkCurCat = stkData.cats.length ? stkData.cats[0].id : '';
@@ -256,7 +284,13 @@ function renderStickerDrawer() {
   }
   stkGrid.replaceChildren();
   var items = stkItemsOf(stkCurCat);
-  if (!items.length) {
+  var pack = stkCat(stkData.emojiPackCat || 'sc-mphone-defaults') || stkCatByName('自带');
+  if (pack && stkCurCat === pack.id) {
+    stkGrid.appendChild(stkGameCell('dice', '骰子'));
+    stkGrid.appendChild(stkGameCell('rps', '猜拳'));
+    stkGrid.appendChild(stkGameCell('coin', '硬币'));
+  }
+  if (!items.length && !(pack && stkCurCat === pack.id)) {
     var empty = document.createElement('div');
     empty.className = 'stk-empty';
     empty.textContent = stkData.cats.length ? '这个分类还没有表情包\n点菜单里的 ＋ 导入' : '还没有表情包\n点菜单里的 ＋ 导入';

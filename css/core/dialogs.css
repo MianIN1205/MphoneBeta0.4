@@ -202,35 +202,96 @@
   color: #fff6fa; background: radial-gradient(ellipse at 50% 15%, #64404f, #30232e 67%, #221b25);
 }
 .private-call-screen[hidden], .private-call-mini[hidden], .private-call-screen [hidden] { display: none; }
-.private-call-header { display: grid; grid-template-columns: 40px 1fr 40px; align-items: center; text-align: center; font-size: 13px; color: #f1dae5; }
-.private-call-header button, .private-call-controls button, .private-call-compose button {
-  min-height: 40px; border: 0; border-radius: 18px; background: rgba(255,255,255,.13); color: inherit; font: inherit;
+.private-call-header { display: grid; grid-template-columns: 76px 1fr 76px; align-items: center; text-align: center; font-size: 13px; color: #f1dae5; }
+.private-call-header button {
+  display: inline-flex; align-items: center; justify-content: center; gap: 3px;
+  width: 72px; height: 32px; min-height: 32px; padding: 0 8px;
+  border: 0; border-radius: 16px; background: rgba(255,255,255,.13); color: inherit;
+  font: inherit; font-size: 13px; line-height: 1;
 }
-.private-call-header button { font-size: 24px; }
-.private-call-stage { position: relative; flex: 1; min-height: 108px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; }
+.private-call-header button svg { width: 16px; height: 16px; display: block; flex: none; }
+.private-call-stage { position: relative; flex: 1; min-height: 0; display: flex; flex-direction: column; align-items: center; justify-content: flex-end; gap: 10px; }
+.private-call-hero { display: flex; flex-direction: column; align-items: center; gap: 8px; margin-top: auto; margin-bottom: auto; }
 .private-call-avatar { width: 68px; height: 68px; border-radius: 22px; overflow: hidden; display: grid; place-items: center; background: #795765; }
 .private-call-avatar img { width: 100%; height: 100%; object-fit: cover; }
 .private-call-name { font-size: 19px; }
 .private-call-time, .private-call-status { color: #e5c6d5; font-size: 12px; }
-.private-call-stage video { position: absolute; width: min(26%, 110px); right: 0; bottom: 8px; aspect-ratio: 3 / 4; border-radius: 11px; object-fit: cover; transform: scaleX(-1); }
-.private-call-bottom { display: flex; flex-direction: column; gap: 8px; min-height: 0; overflow: auto; }
-.private-call-status { text-align: center; }
-.private-call-text { padding: 7px 10px; border-radius: 12px; background: rgba(255,255,255,.09); font-size: 13px; }
-.private-call-text summary { cursor: pointer; padding-block: 3px; }
-.private-call-screen .private-call-log { color: #fff4f8; max-height: 96px; padding: 3px 0; }
-.private-call-compose { display: flex; gap: 6px; margin-top: 5px; }
-.private-call-compose textarea { min-width: 0; flex: 1; resize: none; }
-.private-call-compose button { padding-inline: 12px; }
-.private-call-screen audio { width: 100%; height: 32px; }
-.private-call-controls { display: flex; justify-content: center; gap: 8px; }
-.private-call-controls button { padding-inline: 15px; font-size: 13px; }
-.private-call-controls [data-close] { background: #ce4e66; color: white; }
-.private-call-mini {
-  position: absolute; z-index: 2400; top: max(13px, env(safe-area-inset-top)); right: 12px;
-  display: flex; align-items: center; gap: 6px; padding: 7px 10px; min-height: 34px;
-  border: 1px solid #d8aaba; border-radius: 18px; background: #fff0f5; color: #794958;
-  font: inherit; box-shadow: 0 3px 12px #402a3b38;
+.private-call-screen.is-video .private-call-avatar { width: 92px; height: 92px; border-radius: 28px; }
+.private-call-self {
+  position: absolute; z-index: 2; top: 8px; right: 10px; width: 112px; aspect-ratio: 3 / 4;
+  border-radius: 16px; overflow: hidden; touch-action: none; cursor: grab;
+  background: #3a2a32; border: 1px solid rgba(255,255,255,.22); box-shadow: 0 8px 20px rgba(0,0,0,.28);
 }
+.private-call-self video { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; transform: scaleX(-1); background: #2a2026; }
+.private-call-self video.unmirror { transform: none; }
+.private-call-self-off { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; padding: 8px; text-align: center; color: #f3d5e2; font-size: 12px; line-height: 1.45; }
+.private-call-self.live .private-call-self-off { display: none; }
+.private-call-screen:not(.is-video) .private-call-self { display: none; }
+.private-call-bottom { display: flex; flex-direction: column; gap: 8px; min-height: 0; }
+.private-call-status { text-align: center; }
+.private-call-screen .private-call-log {
+  position: relative; z-index: 1; width: 100%;
+  max-height: 42%; overflow: auto; display: flex; flex-direction: column; gap: 6px;
+  margin: 0; padding: 18px 2px 0; color: #fff4f8; flex: 0 1 auto;
+  -webkit-mask-image: linear-gradient(to bottom, transparent, #000 22px);
+  mask-image: linear-gradient(to bottom, transparent, #000 22px);
+}
+.private-call-screen .private-call-line {
+  max-width: 92%; padding: 1px 2px; background: none; font-size: 13px; line-height: 1.45; color: #f7e4ec;
+}
+.private-call-screen .private-call-line.mine { align-self: flex-end; color: #fff; }
+.private-call-screen .private-call-line b { display: block; margin-bottom: 1px; font-size: 11px; font-weight: 600; color: rgba(255,236,244,.62); }
+.private-call-screen .private-call-line p { margin: 0; }
+.private-call-screen .private-call-line audio { display: block; width: min(100%, 200px); height: 28px; margin-top: 4px; }
+.private-call-take {
+  display: flex; align-items: center; gap: 8px;
+  padding: 6px 8px 6px 6px; border-radius: 16px; background: rgba(255,255,255,.16);
+}
+.private-call-take [data-play], .private-call-take [data-drop] {
+  width: 32px; min-height: 32px; padding: 0; border: 0; border-radius: 50%;
+  background: #fff7f9; color: #c45b78; font: inherit; font-size: 13px;
+}
+.private-call-take [data-drop] { background: transparent; color: #f3d5e2; }
+.private-call-wave { flex: 1; width: 0; height: 22px; display: block; }
+.private-call-take b { min-width: 24px; font-size: 12px; font-weight: 600; color: #fff4f8; }
+.private-call-compose { display: flex; gap: 8px; align-items: flex-end; margin: 0; }
+.private-call-screen .private-call-compose textarea {
+  min-width: 0; flex: 1; resize: none; color: #3d2c34; background: #fff7f9; caret-color: #c45b78;
+}
+.private-call-screen .private-call-compose textarea::placeholder { color: #b09aa4; }
+.private-call-compose button {
+  min-height: 40px; padding-inline: 14px; border: 0; border-radius: 18px;
+  background: rgba(255,255,255,.13); color: inherit; font: inherit;
+}
+.private-call-bottom.has-take [data-send] { background: #ce4e66; color: #fff; }
+.private-call-controls { display: flex; justify-content: center; flex-wrap: nowrap; gap: 8px; }
+.private-call-controls button {
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px;
+  flex: 0 0 56px; width: 56px; min-width: 0; min-height: 56px; padding: 6px 2px 5px;
+  border: 0; border-radius: 18px; background: rgba(255,255,255,.13); color: inherit;
+  font: inherit; font-size: 11px; line-height: 1.15;
+}
+.private-call-screen.is-video .private-call-controls { gap: 6px; }
+.private-call-screen.is-video .private-call-controls button { flex: 1 1 0; width: auto; }
+.private-call-controls button svg { width: 20px; height: 20px; display: block; }
+.private-call-controls [data-close] { background: #ce4e66; color: #fff; }
+.private-call-controls [data-close] svg { transform: rotate(135deg); }
+.private-call-controls button.is-on { background: rgba(255,255,255,.32); }
+.private-call-controls [data-record].is-on { background: #ce4e66; color: #fff; }
+.private-call-mini {
+  position: absolute; z-index: 2400; top: 15px; right: 86px;
+  display: flex; align-items: center; gap: 3px; padding: 2px 7px; min-height: 22px;
+  border: 1px solid #d8aaba; border-radius: 12px; background: #fff0f5; color: #794958;
+  font: inherit; font-size: 11px; line-height: 1; box-shadow: 0 2px 8px #402a3b28;
+}
+.cr-call-log {
+  align-self: center; border: 0; background: none; font: inherit;
+  font-size: 12px; color: #9a7080; padding: 3px 8px; cursor: pointer;
+}
+.private-call-rec { max-height: 46vh; overflow: auto; display: flex; flex-direction: column; gap: 8px; }
+.private-call-rec-line b { display: block; font-size: 11px; color: #a56b80; }
+.private-call-rec-line p { margin: 0; font-size: 14px; color: #4a3942; line-height: 1.45; }
+.private-call-rec-empty { color: #8a7680; font-size: 13px; text-align: center; }
 
 .chat-msg-row .chat-msg-bubble.private-keepsake-card {
   width: min(56vw, 220px); padding: 10px 12px 8px;
