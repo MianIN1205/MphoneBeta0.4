@@ -268,7 +268,9 @@ function createVoiceBubble(m, list, empty) {
     if (m.voice._speaking) return;
     var speaker = charList[openingChatCharIdx];
     if (!speaker || !speaker.chatCfg || !speaker.chatCfg.voiceApi) {
-      showToast('没开「使用语音模型」，点了也不会去读', 'plain');
+      transcriptWrap.classList.add('open');
+      transcriptWrap.inert = false;
+      showToast('这条还是文字。打开「使用语音模型」后再点播放，就会转成声音', 'plain');
       return;
     }
     if (typeof ttsSynthesize !== 'function' || typeof ttsActive !== 'function' || !ttsActive().key) {
@@ -380,7 +382,7 @@ function createVoiceTranscript(message, status) {
     button.focus({ preventScroll: true });
   });
   retry.addEventListener('click', async function() {
-    if (!sttReady()) { showToast('先配置语音识别接口', 'plain'); return; }
+    if (!sttReady()) { showToast('到设置 → 语音 API → 语音识别，填一个能听声音的模型', 'plain'); return; }
     var src = message.voice.src, original = message.transcript, originalStatus = message.voice.transcriptStatus;
     retry.disabled = true;
     retry.textContent = '正在转写…';
@@ -739,7 +741,12 @@ function finishRecording(send, review) {
       m.voice.transcriptStatus = transcript.partial ? 'partial' : 'browser';
     }
     if (review) openVoiceReview(hist, char, m);
-    else saveRecordedVoice(hist, m);
+    else {
+      saveRecordedVoice(hist, m);
+      if (!m.transcript || m.voice.transcriptStatus === 'partial') {
+        showToast('这段没转全。到设置 → 语音 API → 语音识别，填一个能听声音的模型', 'plain');
+      }
+    }
   }).catch(function(err) {
     console.warn('[Mphone] 保存语音失败:', err);
     showToast('语音没能保存', 'error');

@@ -14,7 +14,7 @@ var TTS_MODELS = {
 };
 var TTS_HINT = {
   openai: '地址填的是 OpenAI 官方。模型点右边刷新，从接口拉取。音色是官方那一套，OpenAI 没有音色列表。中转站请选「自定义」。',
-  minimax: '内地和海外都能用，请求方式一样，密钥不能混用。MiniMax 没有模型列表，这里是官方语音模型。音色先放官方的，刷新会按这个密钥拉取能用的，包括你复刻的。',
+  minimax: '内地和海外都能用，请求方式一样，密钥不能混用。MiniMax 没有模型列表，这里是官方语音模型。点模型旁边的刷新会顺手试一次密钥，告诉你连没连上。音色先放官方的，音色旁边的刷新会按这个密钥拉取能用的，包括你复刻的。',
   elevenlabs: '地址填的是 ElevenLabs 官方。模型和音色都可以点右边刷新，按这个密钥拉取。没刷新时，音色是公开的那一套。',
   custom: '自己填中转地址，按 OpenAI 的 /audio/speech 来读。MiniMax 和 ElevenLabs 请选上面的服务商。'
 };
@@ -399,7 +399,16 @@ function ttsRefreshModels() {
   if (cfg.provider === 'minimax') {
     ttsFetched['model:minimax'] = TTS_MODELS.minimax.slice();
     ttsOpenPop('model');
-    showToast('MiniMax 没有模型列表，已放上官方语音模型', 'plain');
+    if (!cfg.key) {
+      showToast('还没填密钥，不知道连没连上。模型是官方的', 'plain');
+      return;
+    }
+    btn.classList.add('spinning');
+    ttsFetchVoices(cfg).then(function() {
+      showToast('密钥连上了。MiniMax 没有模型列表，这些是官方语音模型', 'success');
+    }).catch(function(err) {
+      showToast('没连上：' + (err && err.message ? err.message : '请求失败'), 'error');
+    }).then(function() { btn.classList.remove('spinning'); });
     return;
   }
   if (!cfg.url || !cfg.key) { showToast('请先填接口地址和 API 密钥', 'plain'); return; }

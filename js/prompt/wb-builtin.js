@@ -248,7 +248,7 @@ var WB_VOICE_ENTRIES = [
   {
     id: 'wb-voice-said',
     name: '只读说出口的话',
-    content: '有些话会被读出来。读的是说出口的句子，不是动作，也不是旁白。\n· 动作、神态仍放在 *星号* 里。星号里的内容不会被朗读。\n· 气泡里只写这个人真的会说的话。不要写「语气悲伤」「停顿两秒」「声音放轻」这种说明。\n· 打字聊天仍按平时的样子。不要为了朗读把每句都改成播音稿。'
+    content: '只有单独写成 <语音>说出口的那一句</语音> 时，才会变成一条语音条。普通气泡是打字，不会被读出来。\n· 有时候想发才写，不要每轮都发。不要写「我发了条语音」「（语音）」。\n· 标签里只放真的会说的话。动作、神态仍放在 *星号* 里，不会被朗读。\n· 不要写「语气悲伤」「停顿两秒」「声音放轻」这种说明。'
   },
   {
     id: 'wb-voice-pause',
@@ -262,15 +262,21 @@ var WB_VOICE_ENTRIES = [
   }
 ];
 (function() {
-  if (Number(mphoneStore.load('mphone_wb_voice_seed', 0)) >= 1) return;
+  var ver = Number(mphoneStore.load('mphone_wb_voice_seed', 0));
+  if (ver >= 2) return;
   if (!wbFolders.some(function(f) { return f.id === WB_VOICE_FOLDER_ID; })) {
     wbFolders.push({ id: WB_VOICE_FOLDER_ID, name: '语音' });
   }
+  var oldSaid = '有些话会被读出来。读的是说出口的句子，不是动作，也不是旁白。';
   WB_VOICE_ENTRIES.forEach(function(def) {
-    if (wbEntries.some(function(e) { return e.id === def.id; })) return;
-    wbEntries.push({ id: def.id, name: def.name, keywords: '', content: def.content, pos: 'after', folderId: WB_VOICE_FOLDER_ID, kind: 'rule', enabled: true });
+    var hit = wbEntries.filter(function(e) { return e.id === def.id; })[0];
+    if (!hit) {
+      wbEntries.push({ id: def.id, name: def.name, keywords: '', content: def.content, pos: 'after', folderId: WB_VOICE_FOLDER_ID, kind: 'rule', enabled: true });
+    } else if (def.id === 'wb-voice-said' && String(hit.content || '').indexOf(oldSaid) === 0) {
+      hit.content = def.content;
+    }
   });
   saveWbEntries();
-  mphoneStore.save('mphone_wb_voice_seed', 1);
+  mphoneStore.save('mphone_wb_voice_seed', 2);
   if (typeof renderWbList === 'function') renderWbList();
 })();

@@ -42,6 +42,53 @@ document.getElementById('sttSaveBtn').addEventListener('click', function() {
   mphoneStore.save('mphone_stt_cfg', sttCfg);
   showToast('✓ 语音识别设置已保存', 'success');
 });
+function sttFormEndpoint() {
+  var main = typeof getApiCfg === 'function' ? getApiCfg() : { url: '', key: '' };
+  var url = document.getElementById('sttUrl').value.trim() || main.url || '';
+  var same = !document.getElementById('sttUrl').value.trim() || url.replace(/\/+$/, '') === String(main.url || '').replace(/\/+$/, '');
+  var key = document.getElementById('sttKey').value.trim() || (same ? (main.key || '') : '');
+  return { url: url, key: key };
+}
+function sttCloseModels() {
+  var pop = document.getElementById('sttModelPopup');
+  if (pop) pop.classList.remove('open');
+}
+document.addEventListener('click', sttCloseModels);
+document.getElementById('sttModelRefresh').addEventListener('click', function(e) {
+  e.stopPropagation();
+  var btn = this;
+  if (btn.classList.contains('spinning')) return;
+  var ep = sttFormEndpoint();
+  if (!ep.url || !ep.key) { showToast('先填接口地址和密钥。地址空着就用主 API 的', 'plain'); return; }
+  if (typeof llmListModels !== 'function') { showToast('现在拉不了模型列表', 'plain'); return; }
+  btn.classList.add('spinning');
+  llmListModels(ep.url, ep.key).then(function(models) {
+    var speech = models.filter(function(id) { return /whisper|sensevoice|paraformer|fun-asr|asr|transcri|tele-speech/i.test(id); });
+    var list = speech.length ? speech : models;
+    if (!list.length) throw new Error('接口没有返回模型');
+    var pop = document.getElementById('sttModelPopup');
+    var current = document.getElementById('sttModel').value.trim();
+    pop.replaceChildren();
+    list.forEach(function(id) {
+      var item = document.createElement('button');
+      item.type = 'button';
+      item.className = 'model-popup-item' + (id === current ? ' selected' : '');
+      item.textContent = id;
+      item.addEventListener('click', function(ev) {
+        ev.stopPropagation();
+        document.getElementById('sttModel').value = id;
+        sttCloseModels();
+      });
+      pop.appendChild(item);
+    });
+    if (typeof ttsPlacePop === 'function') ttsPlacePop(pop, document.getElementById('sttModel'));
+    pop.classList.add('open');
+    showToast(speech.length ? '这些是听得见声音的模型，点一个填进去，再点保存' : '没单独认出语音模型，先列出全部，点一个再保存', speech.length ? 'success' : 'plain');
+  }).catch(function(err) {
+    showToast('没拉到：' + (err && err.message ? err.message : '请求失败'), 'error');
+  }).then(function() { btn.classList.remove('spinning'); });
+});
+document.getElementById('sttModelPopup').addEventListener('click', function(e) { e.stopPropagation(); });
 // 一键填硅基流动（国内不用梯子能连，有免费的语音识别模型），密钥要自己去 cloud.siliconflow.cn 拿
 document.getElementById('sttPresetSf').addEventListener('click', function() {
   document.getElementById('sttUrl').value = 'https://api.siliconflow.cn/v1';

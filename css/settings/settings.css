@@ -61,6 +61,11 @@
   text-transform: uppercase;
   padding: 10px 4px 6px;
 }
+.section-label .section-aside {
+  display: block; margin-top: 3px;
+  font-size: 11px; font-weight: 400; letter-spacing: 0;
+  text-transform: none; line-height: 1.45; color: #b09aa2;
+}
 
 /* 设置卡片 */
 .settings-card {
@@ -131,6 +136,7 @@
 }
 
 .model-select-box { flex: 1; min-width: 0; position: relative; }
+.model-select-box > .field-input { width: 100%; margin: 0; }
 .model-select-trigger {
   display: flex; align-items: center; width: 100%;
   background: rgba(0,0,0,0.045);
