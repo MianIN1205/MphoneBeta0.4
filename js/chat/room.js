@@ -155,7 +155,7 @@ function siyaChrome(sel, op) {
     on + ' .status-time { color: #fff; }\n' + on + ' .signal-bars span, ' + on + ' .battery-fill, ' + on + ' .battery-cap { background: #fff; }\n' + on + ' .battery-body { border-color: #fff; }\n';
 }
 function bubbleTplCss(sel, tpl, colors, op) {
-  var T = ' .chat-msg-bubble:not(.error):not(.img-bubble):not(.sticker-bubble):not(.cr-narr):not(.cr-action-only)';
+  var T = ' .chat-msg-bubble:not(.error):not(.img-bubble):not(.sticker-bubble):not(.cr-narr):not(.cr-action-only):not(.voice-msg)';
   var A = sel + '.ai' + T, U = sel + '.user' + T, both = A + ', ' + U;
   var ca = hexToRgba(colors[0], op), cu = hexToRgba(colors[1], op);
   if (tpl === 'tail') return both + ' { border-radius: 10px; position: relative; }\n' +
@@ -233,13 +233,13 @@ function lookCss(part, scope) {
   var fx = effects[b.effect];
   var sel = scope + ' .chat-msg-row';
   var css =
-    sel + '.ai .chat-msg-bubble:not(.error) { background: ' + hexToRgba(colors[0], op) + ';' + (fx ? ' box-shadow: ' + fx(colors[0]) + ';' : '') + ' }\n' +
-    sel + '.user .chat-msg-bubble:not(.error) { background: ' + hexToRgba(colors[1], op) + ';' + (fx ? ' box-shadow: ' + fx(colors[1]) + ';' : '') + ' }\n';
+    sel + '.ai .chat-msg-bubble:not(.error):not(.voice-msg) { background: ' + hexToRgba(colors[0], op) + ';' + (fx ? ' box-shadow: ' + fx(colors[0]) + ';' : '') + ' }\n' +
+    sel + '.user .chat-msg-bubble:not(.error):not(.voice-msg) { background: ' + hexToRgba(colors[1], op) + ';' + (fx ? ' box-shadow: ' + fx(colors[1]) + ';' : '') + ' }\n';
   if (!look.showAvatar) css += scope + ' .chat-msg-avatar { display: none; }\n';
   if (look.format !== 'box' && look.format !== 'text' && b.tpl && b.tpl !== 'plain') css += bubbleTplCss(sel, b.tpl, colors, op);
   // 文段：不要气泡，像小说一样整段排开；自己说的话用浅一点的颜色靠右
   if (look.format === 'text') {
-    css += sel + ' .chat-msg-bubble:not(.error) { background: transparent !important; box-shadow: none !important; max-width: 100%; padding: 2px 2px; border-radius: 0; line-height: 1.8; }\n' +
+    css += sel + ' .chat-msg-bubble:not(.error):not(.voice-msg) { background: transparent !important; box-shadow: none !important; max-width: 100%; padding: 2px 2px; border-radius: 0; line-height: 1.8; }\n' +
            sel + ' .chat-msg-avatar { display: none; }\n' +
            sel + '.user .chat-msg-bubble:not(.error) { color: #8a6a76; text-align: right; }\n';
   }

@@ -163,7 +163,7 @@ function createVoiceBubble(m, list, empty) {
 
   // 气泡（点击非播放键区域 → 展开/收起转文字）
   var bubble = document.createElement('div');
-  bubble.className = 'chat-msg-bubble';
+  bubble.className = 'chat-msg-bubble voice-msg';
   bubble.style.cssText = 'padding:8px 10px;cursor:pointer;user-select:none;-webkit-user-select:none;width:' + bubbleW + 'px;box-sizing:border-box;';
 
   var inner = document.createElement('div');
@@ -184,7 +184,7 @@ function createVoiceBubble(m, list, empty) {
   durEl.className = 'voice-duration';
   durEl.textContent = durStr;
 
-  if (m.voice.src || preview) inner.appendChild(playBtn);   // 打字发的语音没有录音，不显示播放键
+  if (m.voice.src || preview || (m.role === 'assistant' && m.transcript)) inner.appendChild(playBtn);
   inner.appendChild(cvs);
   inner.appendChild(durEl);
   bubble.appendChild(inner);
@@ -258,10 +258,51 @@ function createVoiceBubble(m, list, empty) {
     if (_playing) {
       audio.pause(); audio.currentTime = 0;
       playBtn.innerHTML = PLAY_SVG; _playing = false; stopWaveAnim();
-    } else {
-      audio.play().catch(function(){});
+      return;
+    }
+    function begin() {
+      audio.play().catch(function() {});
       playBtn.innerHTML = PAUSE_SVG; _playing = true; startWaveAnim();
     }
+    if (m.voice.src) { begin(); return; }
+    if (m.voice._speaking) return;
+    var speaker = charList[openingChatCharIdx];
+    if (!speaker || !speaker.chatCfg || !speaker.chatCfg.voiceApi) {
+      showToast('没开「使用语音模型」，点了也不会去读', 'plain');
+      return;
+    }
+    if (typeof ttsSynthesize !== 'function' || typeof ttsActive !== 'function' || !ttsActive().key) {
+      showToast('还没填语音密钥，这条还听不了', 'plain');
+      return;
+    }
+    m.voice._speaking = true;
+    durEl.textContent = '…';
+    ttsSynthesize(m.transcript, '', null, speaker).then(function(blob) {
+      return new Promise(function(resolve, reject) {
+        var reader = new FileReader();
+        reader.onload = function() { resolve(reader.result); };
+        reader.onerror = function() { reject(reader.error); };
+        reader.readAsDataURL(blob);
+      });
+    }).then(function(src) {
+      m.voice.src = src;
+      audio.src = src;
+      return decodeAudioBytes(dataUrlToBytes(src)).then(function(buf) {
+        if (buf && buf.duration) {
+          m.voice.dur = Math.max(1, Math.round(buf.duration * 10) / 10);
+          var mm = Math.floor(m.voice.dur / 60), ss = Math.round(m.voice.dur % 60);
+          durEl.textContent = mm + ':' + String(ss).padStart(2, '0');
+        }
+        _decoded = buf || _decoded;
+        if (_decoded) drawWaveform(cvs, _decoded);
+      }).catch(function() {});
+    }).then(function() {
+      saveHistories();
+      begin();
+    }).catch(function(err) {
+      durEl.textContent = durStr;
+      showToast('语音没读出来：' + (err && err.message ? err.message : '失败'), 'error');
+    }).then(function() { delete m.voice._speaking; });
   });
   audio.addEventListener('ended', function() {
     playBtn.innerHTML = PLAY_SVG; _playing = false; stopWaveAnim();
@@ -707,4 +748,29 @@ function finishRecording(send, review) {
   ready.then(function() {
     if (pendingVoiceMessages.get(hist) === ready) pendingVoiceMessages.delete(hist);
   });
+}
+
+// 角色回复里的 <语音>：先只存文字，点播放才朗读一次，读好的音频记在这条消息上。
+var VOICE_TAG_RE = /<语音>([\s\S]*?)<\/语音>/g;
+function voiceSplitParts(parts) {
+  var n = 0;
+  var out = [];
+  parts.forEach(function(p) {
+    if (typeof p !== 'string' || p.indexOf('<语音>') < 0) { out.push(p); return; }
+    var last = 0, m;
+    VOICE_TAG_RE.lastIndex = 0;
+    while ((m = VOICE_TAG_RE.exec(p))) {
+      var before = p.slice(last, m.index).trim();
+      if (before) out.push(before);
+      var said = m[1].replace(/\s+/g, ' ').trim();
+      if (said && n < 3) {
+        n++;
+        out.push({ content: '[语音消息]', transcript: said, voice: { src: '', dur: Math.max(1, Math.min(60, Math.round(said.length / 4))) } });
+      } else if (said) out.push(said);
+      last = VOICE_TAG_RE.lastIndex;
+    }
+    var rest = p.slice(last).trim();
+    if (rest) out.push(rest);
+  });
+  return out;
 }

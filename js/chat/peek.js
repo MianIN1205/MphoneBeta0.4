@@ -515,7 +515,7 @@ function peekGenPhotos(char, ps) {
   var next = function() {
     var p = ps.filter(function(x) { return !x.img && !x.genFail; })[0];
     if (!p) { delete peekPhotoBusy[key]; return; }
-    queueImageGen(p.desc || '').then(function(src) { p.img = src; }, function(err) { p.genFail = true; console.warn('[Mphone] 相册照片没画出来:', err); })
+    queueImageGen(p.desc || '', char && char.chatCfg && char.chatCfg.lookPrompt).then(function(src) { p.img = src; }, function(err) { p.genFail = true; console.warn('[Mphone] 相册照片没画出来:', err); })
       .then(function() {
         savePeek();
         if (peekChar() === char && peekState.app === 'photos' && !peekState.detail && appPeek.classList.contains('active')) renderPeek();

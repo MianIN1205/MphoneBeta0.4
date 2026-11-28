@@ -13,16 +13,19 @@ function imgUse(scope) {
   return v;
 }
 // 照着一段画面描述生一张图，返回能直接用的 src（dataURL 压到 768 像素以内）
-function genImageFromDesc(desc) {
-  return imageGenerate(String(desc || '').slice(0, 600)).then(function(src) {
+function genImageFromDesc(desc, look) {
+  var scene = String(desc || '').trim();
+  var face = String(look || '').trim();
+  var prompt = face && scene ? face + '\n' + scene : (face || scene);
+  return imageGenerate(prompt.slice(0, 1200)).then(function(src) {
     if (!/^data:/.test(src)) return src;
     return new Promise(function(resolve) { compressImage(src, 768, resolve); });
   });
 }
 // 一个一个排队生，不同时发好几个请求
 var imgGenQueue = Promise.resolve();
-function queueImageGen(desc) {
-  var p = imgGenQueue.then(function() { return genImageFromDesc(desc); });
+function queueImageGen(desc, look) {
+  var p = imgGenQueue.then(function() { return genImageFromDesc(desc, look); });
   imgGenQueue = p.catch(function() {});
   return p;
 }
@@ -30,12 +33,8 @@ function queueImageGen(desc) {
 // ---------- 聊天：角色发的照片 <照片>画面</照片> ----------
 // 回复里的照片拆成单独一条：先是文字图片（m.textImg），生图模式下画好了再换成真图片（m.imgSrc）
 var PHOTO_TAG_RE = /<照片>([\s\S]*?)<\/照片>/g;
-var PHOTO_GAP = 30;   // 最近这么多条里 TA 发过照片，就先不再发（用户说频率别太高）
-function photoRecentlySent(hist) {
-  return (hist || []).slice(-PHOTO_GAP).some(function(m) { return m.photo && m.role === 'assistant'; });
-}
-function photoSplitParts(parts, hist) {
-  var blocked = photoRecentlySent(hist);
+function photoSplitParts(parts) {
+  var n = 0;
   var out = [];
   parts.forEach(function(p) {
     if (typeof p !== 'string' || p.indexOf('<照片>') < 0) { out.push(p); return; }
@@ -45,7 +44,8 @@ function photoSplitParts(parts, hist) {
       var before = p.slice(last, m.index).trim();
       if (before) out.push(before);
       var desc = m[1].replace(/\s+/g, ' ').trim();
-      if (desc && !blocked) { out.push({ content: '[照片] ' + desc, textImg: desc, photo: true }); blocked = true; }   // 一次最多一张
+      if (desc && n < 3) { out.push({ content: '[照片] ' + desc, textImg: desc, photo: true }); n++; }
+      else if (desc) out.push(desc);
       last = PHOTO_TAG_RE.lastIndex;
     }
     var rest = p.slice(last).trim();
@@ -54,11 +54,12 @@ function photoSplitParts(parts, hist) {
   return out;
 }
 // 记录里还没画的照片（生图模式）：画好换上，正在看这个对话就重画列表
-function genPendingPhotos(hist, msgs) {
+function genPendingPhotos(hist, msgs, char) {
+  var look = char && char.chatCfg && char.chatCfg.lookPrompt;
   msgs.forEach(function(m) {
     if (!m.textImg || m.imgSrc || m._genning) return;
     m._genning = true;
-    queueImageGen(m.textImg).then(function(src) {
+    queueImageGen(m.textImg, look).then(function(src) {
       m.imgSrc = src;
       saveHistories();
       if (appChatRoom.classList.contains('active') && getActiveHistory(openingChatCharIdx) === hist) {
@@ -75,8 +76,10 @@ function genPendingPhotos(hist, msgs) {
 // ---------- 动态：配的文字图在生图模式下一张张画出来，画好一张换一张 ----------
 function feedGenImages(post) {
   if (imgUse('feed') !== 'gen' || !post || !(post.textImgs || []).length) return;
+  var who = (typeof charList !== 'undefined' && post.author) ? charList.filter(function(c) { return c && c.id === post.author.id; })[0] : null;
+  var look = who && who.chatCfg && who.chatCfg.lookPrompt;
   post.textImgs.slice().forEach(function(t) {
-    queueImageGen(t).then(function(src) {
+    queueImageGen(t, look).then(function(src) {
       var i = post.textImgs.indexOf(t);
       if (i >= 0) post.textImgs.splice(i, 1);
       post.images = (post.images || []).concat(src);

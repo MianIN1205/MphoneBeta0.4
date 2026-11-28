@@ -208,6 +208,21 @@
   50%      { box-shadow: 0 0 0 7px rgba(240,80,80,0.08), 0 2px 8px rgba(180,120,120,0.18); }
 }
 
+/* 语音条两边同一套：粉色、圆角、播放键和波形都跟自己发的一样，不跟着文字气泡换主题 */
+.chat-msg-row .chat-msg-bubble.voice-msg {
+  background: rgba(238,186,202,0.88);
+  color: #333;
+  padding: 8px 10px;
+  font-size: 14px;
+  font-weight: 400;
+  letter-spacing: normal;
+  line-height: 1.55;
+  border: none;
+  box-shadow: none;
+}
+.chat-msg-row.ai .chat-msg-bubble.voice-msg { border-radius: 18px 18px 18px 4px; }
+.chat-msg-row.user .chat-msg-bubble.voice-msg { border-radius: 18px 18px 4px 18px; }
+
 /* 语音气泡内容 */
 .voice-bubble-inner {
   display: flex; align-items: center; gap: 7px;

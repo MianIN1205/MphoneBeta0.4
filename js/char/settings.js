@@ -170,7 +170,7 @@ function readBubbleForm() {
 var DEFAULT_CHAT_CFG = {
   maxMem: 50, attention: 10, autoSum: false, sumEvery: 10,
   lang: '', translate: false, replyMin: 2, replyMax: 5,
-  patOn: true, patSuffix: '', voiceId: '', voiceDesc: '',
+  patOn: true, patSuffix: '', voiceApi: false, voiceId: '', voiceDesc: '', lookPrompt: '',
   voiceSpeed: '', voicePitch: '', voiceVol: '', voiceEmotion: '', voiceStable: '', voiceStyle: '',
   vectorOn: false, quickBar: true, actionOn: true, ctxTokens: 16000,
   recallOn: false, recallPeek: true, timeOn: true, batteryOn: true, timeZone: '', peekNotice: false, peekLock: false, starOn: true
@@ -387,7 +387,9 @@ function setChatCfgForm(c) {
   $('replyMax').value     = c.replyMax;
   $('patOn').checked      = c.patOn;
   $('patSuffix').value    = c.patSuffix;
+  $('voiceApiOn').checked = !!c.voiceApi;
   $('voiceId').value      = c.voiceId;
+  $('lookPrompt').value   = c.lookPrompt || '';
   $('voiceDesc').value    = c.voiceDesc || '';
   $('voiceSpeed').value   = c.voiceSpeed === '' || c.voiceSpeed == null ? '' : c.voiceSpeed;
   $('voicePitch').value   = c.voicePitch === '' || c.voicePitch == null ? '' : c.voicePitch;
@@ -429,7 +431,9 @@ function readChatCfgForm() {
     replyMax:  Math.max(rMin, rMax),
     patOn:     $('patOn').checked,
     patSuffix: $('patSuffix').value.trim(),
+    voiceApi:  $('voiceApiOn').checked,
     voiceId:   $('voiceId').value.trim(),
+    lookPrompt: $('lookPrompt').value.trim(),
     voiceDesc: $('voiceDesc').value.trim(),
     voiceSpeed: $('voiceSpeed').value,
     voicePitch: $('voicePitch').value,
@@ -857,7 +861,7 @@ function voiceEmoPaint() {
 })();
 function voiceCardOn(c) {
   c = c || {};
-  return !!(c.voiceId || c.voiceDesc || c.voiceSpeed || c.voicePitch || c.voiceVol || c.voiceEmotion || c.voiceStable || c.voiceStyle);
+  return !!(c.voiceApi || c.voiceId || c.voiceDesc || c.voiceSpeed || c.voicePitch || c.voiceVol || c.voiceEmotion || c.voiceStable || c.voiceStyle);
 }
 function readCircleForm() {
   return Array.prototype.map.call(document.querySelectorAll('#csCircleList .feed-visible-chip.on'), function(c) { return c.dataset.id; });

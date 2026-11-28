@@ -22,6 +22,7 @@ var REPLY_TAGS = [
   { names: ['签名'] },
   { names: ['个性签名'] },
   { names: ['照片', '配图'] },
+  { names: ['语音'] },
   { names: ['看图记录', '回查记录', '语音记录'] },
   { names: ['前情'] },
   { names: ['文件'] },
@@ -122,7 +123,8 @@ function commitAssistantReply(hist, raw, list, empty, firstMeta) {
   var parts = splitReplyParts(raw);
   if (typeof gameSplitParts === 'function') parts = gameSplitParts(parts);
   // 聊天窗口：角色发的照片 <照片>画面</照片> 拆成单独一条（js/chat/img-use.js）
-  if (rc && chatHistories[rc.id] === hist && typeof photoSplitParts === 'function') parts = photoSplitParts(parts, hist);
+  if (rc && chatHistories[rc.id] === hist && typeof photoSplitParts === 'function') parts = photoSplitParts(parts);
+  if (rc && chatHistories[rc.id] === hist && typeof voiceSplitParts === 'function') parts = voiceSplitParts(parts);
   // 聊天窗口：像微信那样一句一个气泡（每次回复条数设成 1 的角色除外）
   var formatChat = rc && chatHistories[rc.id] === hist && !charBigBubble(rc);
   if (formatChat) parts = chatSplitLines(parts);
@@ -156,7 +158,7 @@ function commitAssistantReply(hist, raw, list, empty, firstMeta) {
   });
   if (status && typeof refreshStatusPanel === 'function') refreshStatusPanel();
   // 照片、配图：生图模式下排队画出来（画好前先是文字图片）
-  if (typeof genPendingPhotos === 'function' && rc && imgUse(isDramaHist ? 'drama' : 'chat') === 'gen') genPendingPhotos(hist, added.filter(function(m) { return m.textImg; }));
+  if (typeof genPendingPhotos === 'function' && rc && imgUse(isDramaHist ? 'drama' : 'chat') === 'gen') genPendingPhotos(hist, added.filter(function(m) { return m.textImg; }), rc);
   return added;
 }
 
